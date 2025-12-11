@@ -29,10 +29,13 @@ import {
   LogOut,
   User,
   ChevronRight,
+  BarChart3,
+  Search,
+  AlertTriangle,
 } from "lucide-react";
 import type { Inquiry, PipelineStage } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
-import { format } from "date-fns";
+import { format, differenceInHours } from "date-fns";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
@@ -88,6 +91,29 @@ export default function Dashboard() {
   const admittedCount = getInquiriesByStage("admitted").length;
   const nonViableCount = getInquiriesByStage("non_viable").length;
 
+  // Get inquiries that need follow-up (in VOB or quote stages for more than 24 hours)
+  const getFollowUpReminders = () => {
+    if (!inquiries) return [];
+    const now = new Date();
+    const reminderStages: PipelineStage[] = ["vob_pending", "quote_client"];
+    
+    return inquiries
+      .filter((inquiry) => {
+        if (!reminderStages.includes(inquiry.stage as PipelineStage)) return false;
+        if (!inquiry.updatedAt) return false;
+        
+        const hoursSinceUpdate = differenceInHours(now, new Date(inquiry.updatedAt));
+        return hoursSinceUpdate >= 24;
+      })
+      .sort((a, b) => {
+        const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return aDate - bDate; // Oldest first
+      });
+  };
+
+  const followUpReminders = getFollowUpReminders();
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -108,6 +134,24 @@ export default function Dashboard() {
             >
               <Plus className="w-5 h-5" />
               <span className="hidden sm:inline">New Inquiry</span>
+            </Button>
+            
+            <Button 
+              variant="outline"
+              size="icon"
+              onClick={() => navigate("/search")}
+              data-testid="button-search"
+            >
+              <Search className="w-5 h-5" />
+            </Button>
+            
+            <Button 
+              variant="outline"
+              size="icon"
+              onClick={() => navigate("/analytics")}
+              data-testid="button-analytics"
+            >
+              <BarChart3 className="w-5 h-5" />
             </Button>
             
             <ThemeToggle />
@@ -156,6 +200,63 @@ export default function Dashboard() {
             )}
           </p>
         </div>
+
+        {followUpReminders.length > 0 && (
+          <Card className="mb-8 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20" data-testid="card-follow-up-reminders">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold">Follow-Up Reminders</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {followUpReminders.length} {followUpReminders.length === 1 ? "inquiry" : "inquiries"} pending for 24+ hours
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {followUpReminders.slice(0, 5).map((inquiry) => {
+                const StageIcon = stageIcons[inquiry.stage as PipelineStage] || Clock;
+                const hoursAgo = inquiry.updatedAt 
+                  ? differenceInHours(new Date(), new Date(inquiry.updatedAt))
+                  : 0;
+                
+                return (
+                  <button
+                    key={inquiry.id}
+                    onClick={() => navigate(`/inquiry/${inquiry.id}`)}
+                    className="w-full text-left p-3 rounded-lg border bg-card hover-elevate active-elevate-2 transition-colors"
+                    data-testid={`reminder-card-${inquiry.id}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${stageColors[inquiry.stage as PipelineStage]}`}>
+                          <StageIcon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">
+                            {inquiry.clientName || inquiry.callerName || "Unknown Caller"}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {stageDisplayNames[inquiry.stage as PipelineStage]} - {hoursAgo} hours ago
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                    </div>
+                  </button>
+                );
+              })}
+              {followUpReminders.length > 5 && (
+                <p className="text-sm text-center text-muted-foreground pt-2">
+                  +{followUpReminders.length - 5} more needing attention
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {activeStages.map((stage) => {

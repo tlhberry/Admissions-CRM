@@ -8,6 +8,8 @@ import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import NewInquiry from "@/pages/NewInquiry";
 import InquiryDetail from "@/pages/InquiryDetail";
+import Analytics from "@/pages/Analytics";
+import Search from "@/pages/Search";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -33,6 +35,8 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/inquiry/new" component={NewInquiry} />
           <Route path="/inquiry/:id" component={InquiryDetail} />
+          <Route path="/analytics" component={Analytics} />
+          <Route path="/search" component={Search} />
         </>
       )}
       <Route component={NotFound} />

@@ -8,7 +8,16 @@ import {
   type UpdateInquiry,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, gte, lte, ilike, or, SQL } from "drizzle-orm";
+
+export interface InquiryFilters {
+  search?: string;
+  stage?: string;
+  referralSource?: string;
+  insuranceProvider?: string;
+  startDate?: string;
+  endDate?: string;
+}
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -19,6 +28,7 @@ export interface IStorage {
   getInquiry(id: number): Promise<Inquiry | undefined>;
   getInquiriesByUser(userId: string): Promise<Inquiry[]>;
   getAllInquiries(): Promise<Inquiry[]>;
+  searchInquiries(filters: InquiryFilters): Promise<Inquiry[]>;
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
   updateInquiry(id: number, data: UpdateInquiry): Promise<Inquiry | undefined>;
   deleteInquiry(id: number): Promise<void>;
@@ -67,6 +77,55 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(inquiries)
+      .orderBy(desc(inquiries.createdAt));
+  }
+
+  async searchInquiries(filters: InquiryFilters): Promise<Inquiry[]> {
+    const conditions: SQL[] = [];
+
+    if (filters.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(
+        or(
+          ilike(inquiries.callerName, searchTerm),
+          ilike(inquiries.clientName, searchTerm),
+          ilike(inquiries.phoneNumber, searchTerm),
+          ilike(inquiries.email, searchTerm),
+          ilike(inquiries.insuranceProvider, searchTerm)
+        )!
+      );
+    }
+
+    if (filters.stage) {
+      conditions.push(eq(inquiries.stage, filters.stage));
+    }
+
+    if (filters.referralSource) {
+      conditions.push(eq(inquiries.referralSource, filters.referralSource));
+    }
+
+    if (filters.insuranceProvider) {
+      conditions.push(ilike(inquiries.insuranceProvider, `%${filters.insuranceProvider}%`));
+    }
+
+    if (filters.startDate) {
+      conditions.push(gte(inquiries.callDateTime, new Date(filters.startDate)));
+    }
+
+    if (filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(inquiries.callDateTime, endDate));
+    }
+
+    if (conditions.length === 0) {
+      return this.getAllInquiries();
+    }
+
+    return db
+      .select()
+      .from(inquiries)
+      .where(and(...conditions))
       .orderBy(desc(inquiries.createdAt));
   }
 
