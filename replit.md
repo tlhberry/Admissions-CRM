@@ -74,6 +74,38 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 
 ### Public Endpoints
 - `POST /api/webhooks/ctm` - CallTrackingMetrics webhook (optionally secured with CTM_WEBHOOK_SECRET)
+- `POST /api/webhooks/ctm/test` - Test endpoint to simulate CTM call (requires authentication)
+
+## CallTrackingMetrics Webhook Setup
+
+### 1. Webhook URL Format
+In your CTM account, configure a webhook to POST to:
+```
+https://your-app-name.replit.app/api/webhooks/ctm
+```
+
+### 2. Optional Security
+Add a secret for webhook validation:
+- Set `CTM_WEBHOOK_SECRET` in your Replit secrets
+- Configure CTM to send the secret either as:
+  - Query parameter: `?secret=YOUR_SECRET`
+  - Header: `x-ctm-secret: YOUR_SECRET`
+
+### 3. CTM Field Mapping
+The webhook captures these CTM fields and maps them to inquiry data:
+
+| CTM Field | Inquiry Field | Notes |
+|-----------|---------------|-------|
+| `caller_name`, `caller_id`, `cnam` | callerName | First available value used |
+| `caller_number`, `ani`, `from` | phoneNumber | Caller's phone number |
+| `tracking_source`, `source`, `campaign` | referralSource | Mapped to category (google, facebook, etc.) |
+| `call_id`, `id` | ctmCallId | CTM's unique call identifier |
+| `tracking_number`, `called_number`, `to` | ctmTrackingNumber | The tracking number dialed |
+| `duration`, `talk_time`, `call_length` | callDuration | Call duration in seconds |
+| `recording_url`, `recording`, `audio_url` | callRecordingUrl | URL to call recording |
+
+### 4. Testing the Integration
+Click the phone icon button in the Dashboard header to create a test inquiry simulating a CTM call.
 
 ## Environment Variables
 

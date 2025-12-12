@@ -161,7 +161,24 @@ export async function registerRoutes(
 
   // CallTrackingMetrics Webhook Endpoint
   // This endpoint receives incoming call data from CallTrackingMetrics
-  // Webhook URL: https://your-app.replit.app/api/webhooks/ctm
+  // 
+  // WEBHOOK URL FORMAT:
+  // https://your-app.replit.app/api/webhooks/ctm
+  // 
+  // If using a secret for security, add it as a query parameter or header:
+  // URL: https://your-app.replit.app/api/webhooks/ctm?secret=YOUR_SECRET
+  // Header: x-ctm-secret: YOUR_SECRET
+  //
+  // CTM FIELD MAPPING:
+  // CTM sends these fields which we capture:
+  // - caller_name / caller_id -> callerName
+  // - caller_number / ani -> phoneNumber
+  // - tracking_source / source -> referralSource (mapped to our categories)
+  // - call_id -> ctmCallId
+  // - tracking_number -> ctmTrackingNumber
+  // - duration / talk_time -> callDuration
+  // - recording_url / recording -> callRecordingUrl
+  //
   app.post("/api/webhooks/ctm", async (req, res) => {
     try {
       // Validate webhook secret if configured
@@ -178,12 +195,26 @@ export async function registerRoutes(
       console.log("CTM webhook received:", JSON.stringify(callData, null, 2));
 
       // Map CTM call data to inquiry fields
-      // CTM typically sends: caller_number, caller_name, tracking_source, call_start_time, etc.
-      const callerName = callData.caller_name || callData.caller_id || "Incoming Call";
-      const phoneNumber = callData.caller_number || callData.caller_id || callData.ani || "";
-      const referralSource = mapCTMSourceToReferral(callData.tracking_source || callData.source);
-      const referralDetails = callData.tracking_source || callData.source || "";
-      const initialNotes = `Auto-created from CallTrackingMetrics webhook.\nCall ID: ${callData.call_id || "N/A"}\nTracking Number: ${callData.tracking_number || "N/A"}\nCall Duration: ${callData.duration || "N/A"} seconds`;
+      const callerName = callData.caller_name || callData.caller_id || callData.cnam || "Incoming Call";
+      const phoneNumber = callData.caller_number || callData.caller_id || callData.ani || callData.from || "";
+      const referralSource = mapCTMSourceToReferral(callData.tracking_source || callData.source || callData.campaign);
+      const referralDetails = callData.tracking_source || callData.source || callData.campaign || "";
+      
+      // CTM-specific fields
+      const ctmCallId = callData.call_id || callData.id || null;
+      const ctmTrackingNumber = callData.tracking_number || callData.called_number || callData.to || null;
+      const callDuration = callData.duration || callData.talk_time || callData.call_length || null;
+      const callRecordingUrl = callData.recording_url || callData.recording || callData.audio_url || null;
+      const ctmSource = callData.tracking_source || callData.source || callData.campaign || null;
+      
+      const initialNotes = [
+        "Auto-created from CallTrackingMetrics webhook.",
+        ctmCallId ? `Call ID: ${ctmCallId}` : null,
+        ctmTrackingNumber ? `Tracking Number: ${ctmTrackingNumber}` : null,
+        callDuration ? `Call Duration: ${callDuration} seconds` : null,
+        callData.call_time || callData.start_time ? `Call Time: ${callData.call_time || callData.start_time}` : null,
+        callData.city || callData.state ? `Location: ${[callData.city, callData.state].filter(Boolean).join(", ")}` : null,
+      ].filter(Boolean).join("\n");
 
       const inquiry = await storage.createInquiry({
         callerName,
@@ -192,17 +223,83 @@ export async function registerRoutes(
         referralDetails,
         initialNotes,
         stage: "inquiry",
+        ctmCallId: ctmCallId?.toString() || null,
+        ctmTrackingNumber,
+        callDuration: callDuration?.toString() || null,
+        callRecordingUrl,
+        ctmSource,
       });
 
       console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber}`);
       res.status(201).json({ 
         success: true, 
         inquiryId: inquiry.id,
-        message: "Inquiry created from CTM webhook" 
+        message: "Inquiry created from CTM webhook",
+        caller: phoneNumber,
       });
     } catch (error) {
       console.error("CTM webhook error:", error);
       res.status(500).json({ message: "Failed to process CTM webhook" });
+    }
+  });
+
+  // Test endpoint to simulate CTM webhook (for testing purposes)
+  // This allows you to test the webhook integration without waiting for real calls
+  app.post("/api/webhooks/ctm/test", isAuthenticated, async (req, res) => {
+    try {
+      // Generate sample CTM-like data
+      const sampleData = {
+        call_id: `test-${Date.now()}`,
+        caller_name: req.body.caller_name || "Test Caller",
+        caller_number: req.body.caller_number || "(555) 123-4567",
+        tracking_source: req.body.tracking_source || "google_ads",
+        tracking_number: req.body.tracking_number || "(800) 555-1234",
+        duration: req.body.duration || "180",
+        recording_url: req.body.recording_url || "https://example.com/recordings/sample.mp3",
+        call_time: new Date().toISOString(),
+        city: req.body.city || "Los Angeles",
+        state: req.body.state || "CA",
+      };
+
+      // Forward to the real webhook handler
+      const callerName = sampleData.caller_name;
+      const phoneNumber = sampleData.caller_number;
+      const referralSource = mapCTMSourceToReferral(sampleData.tracking_source);
+      const referralDetails = sampleData.tracking_source;
+      
+      const initialNotes = [
+        "TEST: Simulated CTM webhook call.",
+        `Call ID: ${sampleData.call_id}`,
+        `Tracking Number: ${sampleData.tracking_number}`,
+        `Call Duration: ${sampleData.duration} seconds`,
+        `Call Time: ${sampleData.call_time}`,
+        `Location: ${sampleData.city}, ${sampleData.state}`,
+      ].join("\n");
+
+      const inquiry = await storage.createInquiry({
+        callerName,
+        phoneNumber,
+        referralSource,
+        referralDetails,
+        initialNotes,
+        stage: "inquiry",
+        ctmCallId: sampleData.call_id,
+        ctmTrackingNumber: sampleData.tracking_number,
+        callDuration: sampleData.duration,
+        callRecordingUrl: sampleData.recording_url,
+        ctmSource: sampleData.tracking_source,
+      });
+
+      console.log(`CTM test webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber}`);
+      res.status(201).json({ 
+        success: true, 
+        inquiryId: inquiry.id,
+        message: "Test inquiry created successfully",
+        sampleDataUsed: sampleData,
+      });
+    } catch (error) {
+      console.error("CTM test webhook error:", error);
+      res.status(500).json({ message: "Failed to process test webhook" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,10 +32,13 @@ import {
   BarChart3,
   Search,
   AlertTriangle,
+  PhoneIncoming,
 } from "lucide-react";
 import type { Inquiry, PipelineStage } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
 import { format, differenceInHours } from "date-fns";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
@@ -64,9 +67,31 @@ const stageColors: Record<PipelineStage, string> = {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const { data: inquiries, isLoading } = useQuery<Inquiry[]>({
     queryKey: ["/api/inquiries"],
+  });
+
+  const testCTMWebhook = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/webhooks/ctm/test", {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inquiries"] });
+      toast({
+        title: "Test Call Created",
+        description: `Inquiry #${data.inquiryId} created from simulated CTM call`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Test Failed",
+        description: "Could not create test inquiry",
+        variant: "destructive",
+      });
+    },
   });
 
   const activeStages: PipelineStage[] = [
@@ -127,7 +152,6 @@ export default function Dashboard() {
           
           <div className="flex items-center gap-2">
             <Button 
-              size="lg" 
               onClick={() => navigate("/inquiry/new")}
               data-testid="button-new-inquiry"
               className="gap-2"
@@ -152,6 +176,17 @@ export default function Dashboard() {
               data-testid="button-analytics"
             >
               <BarChart3 className="w-5 h-5" />
+            </Button>
+            
+            <Button 
+              variant="outline"
+              size="icon"
+              onClick={() => testCTMWebhook.mutate()}
+              disabled={testCTMWebhook.isPending}
+              data-testid="button-test-ctm"
+              title="Test CTM Webhook"
+            >
+              <PhoneIncoming className="w-5 h-5" />
             </Button>
             
             <ThemeToggle />

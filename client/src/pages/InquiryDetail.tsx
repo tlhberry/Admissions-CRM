@@ -271,8 +271,56 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               {inquiry.initialNotes && (
                 <div className="sm:col-span-2">
                   <p className="text-sm text-muted-foreground">Notes</p>
-                  <p className="font-medium">{inquiry.initialNotes}</p>
+                  <p className="font-medium whitespace-pre-line">{inquiry.initialNotes}</p>
                 </div>
+              )}
+              {(inquiry.ctmCallId || inquiry.ctmTrackingNumber || inquiry.callDuration || inquiry.callRecordingUrl) && (
+                <>
+                  <Separator className="sm:col-span-2" />
+                  <div className="sm:col-span-2 pt-2">
+                    <p className="text-sm font-medium text-muted-foreground mb-3">CallTrackingMetrics Data</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {inquiry.ctmCallId && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">CTM Call ID</p>
+                          <p className="text-sm font-medium" data-testid="text-ctm-call-id">{inquiry.ctmCallId}</p>
+                        </div>
+                      )}
+                      {inquiry.ctmTrackingNumber && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Tracking Number</p>
+                          <p className="text-sm font-medium" data-testid="text-ctm-tracking-number">{inquiry.ctmTrackingNumber}</p>
+                        </div>
+                      )}
+                      {inquiry.callDuration && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Call Duration</p>
+                          <p className="text-sm font-medium" data-testid="text-call-duration">{inquiry.callDuration} seconds</p>
+                        </div>
+                      )}
+                      {inquiry.ctmSource && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">CTM Source</p>
+                          <p className="text-sm font-medium" data-testid="text-ctm-source">{inquiry.ctmSource}</p>
+                        </div>
+                      )}
+                      {inquiry.callRecordingUrl && (
+                        <div className="sm:col-span-2">
+                          <p className="text-xs text-muted-foreground">Call Recording</p>
+                          <a 
+                            href={inquiry.callRecordingUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-primary hover:underline"
+                            data-testid="link-call-recording"
+                          >
+                            Listen to Recording
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </CardContent>
@@ -297,7 +345,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
         {stage === "vob_pending" && (
           <VOBForm
             inquiry={inquiry}
-            onSubmit={(data) => updateMutation.mutate({ ...data, stage: "quote_client", vobCompletedAt: new Date().toISOString() })}
+            onSubmit={(data) => updateMutation.mutate({ ...data, stage: "quote_client", vobCompletedAt: new Date() })}
             isPending={updateMutation.isPending}
           />
         )}
@@ -313,7 +361,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
 
         {stage === "pre_assessment" && (
           <PreAssessmentSection
-            onComplete={(notes) => updateMutation.mutate({ preAssessmentCompleted: "yes", preAssessmentDate: new Date().toISOString(), preAssessmentNotes: notes, stage: "scheduled" })}
+            onComplete={(notes) => updateMutation.mutate({ preAssessmentCompleted: "yes", preAssessmentDate: new Date(), preAssessmentNotes: notes, stage: "scheduled" })}
             isPending={updateMutation.isPending}
           />
         )}

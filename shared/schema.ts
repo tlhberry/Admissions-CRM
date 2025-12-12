@@ -155,6 +155,12 @@ export const inquiries = pgTable("inquiries", {
   transcription: text("transcription"),
   aiExtractedData: jsonb("ai_extracted_data"),
   
+  // CTM Integration Fields
+  ctmCallId: varchar("ctm_call_id", { length: 100 }),
+  ctmTrackingNumber: varchar("ctm_tracking_number", { length: 50 }),
+  callDuration: varchar("call_duration", { length: 20 }),
+  ctmSource: varchar("ctm_source", { length: 100 }),
+  
   // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
