@@ -225,7 +225,7 @@ export async function registerRoutes(
         stage: "inquiry",
         ctmCallId: ctmCallId?.toString() || null,
         ctmTrackingNumber,
-        callDuration: callDuration?.toString() || null,
+        callDurationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
         callRecordingUrl,
         ctmSource,
       });
@@ -285,7 +285,7 @@ export async function registerRoutes(
         stage: "inquiry",
         ctmCallId: sampleData.call_id,
         ctmTrackingNumber: sampleData.tracking_number,
-        callDuration: sampleData.duration,
+        callDurationSeconds: parseInt(sampleData.duration, 10),
         callRecordingUrl: sampleData.recording_url,
         ctmSource: sampleData.tracking_source,
       });

@@ -274,7 +274,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                   <p className="font-medium whitespace-pre-line">{inquiry.initialNotes}</p>
                 </div>
               )}
-              {(inquiry.ctmCallId || inquiry.ctmTrackingNumber || inquiry.callDuration || inquiry.callRecordingUrl) && (
+              {(inquiry.ctmCallId || inquiry.ctmTrackingNumber || inquiry.callDurationSeconds || inquiry.callRecordingUrl) && (
                 <>
                   <Separator className="sm:col-span-2" />
                   <div className="sm:col-span-2 pt-2">
@@ -292,10 +292,10 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                           <p className="text-sm font-medium" data-testid="text-ctm-tracking-number">{inquiry.ctmTrackingNumber}</p>
                         </div>
                       )}
-                      {inquiry.callDuration && (
+                      {inquiry.callDurationSeconds && (
                         <div>
                           <p className="text-xs text-muted-foreground">Call Duration</p>
-                          <p className="text-sm font-medium" data-testid="text-call-duration">{inquiry.callDuration} seconds</p>
+                          <p className="text-sm font-medium" data-testid="text-call-duration">{inquiry.callDurationSeconds} seconds</p>
                         </div>
                       )}
                       {inquiry.ctmSource && (

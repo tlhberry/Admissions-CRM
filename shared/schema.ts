@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   index,
+  integer,
   jsonb,
   pgTable,
   serial,
@@ -158,7 +159,7 @@ export const inquiries = pgTable("inquiries", {
   // CTM Integration Fields
   ctmCallId: varchar("ctm_call_id", { length: 100 }),
   ctmTrackingNumber: varchar("ctm_tracking_number", { length: 50 }),
-  callDuration: varchar("call_duration", { length: 20 }),
+  callDurationSeconds: integer("call_duration_seconds"),
   ctmSource: varchar("ctm_source", { length: 100 }),
   
   // Timestamps
