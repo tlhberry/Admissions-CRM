@@ -267,12 +267,15 @@ function AccountForm({
       </div>
       <div>
         <Label>Assigned BD Rep</Label>
-        <Select value={formData.assignedBdRepId} onValueChange={(v) => setFormData({ ...formData, assignedBdRepId: v })}>
+        <Select 
+          value={formData.assignedBdRepId || "unassigned"} 
+          onValueChange={(v) => setFormData({ ...formData, assignedBdRepId: v === "unassigned" ? "" : v })}
+        >
           <SelectTrigger data-testid="select-bd-rep">
             <SelectValue placeholder="Select rep" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Unassigned</SelectItem>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
             {users.map((user) => (
               <SelectItem key={user.id} value={user.id}>
                 {user.firstName} {user.lastName || user.email}

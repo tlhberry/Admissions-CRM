@@ -34,14 +34,13 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 
 ## Pipeline Stages
 1. **Inquiry** - New call/inquiry received
-2. **Viability Check** - Determine if client is viable
-3. **Insurance Collection** - Gather insurance information
-4. **VOB Pending** - Verification of Benefits in progress
-5. **Quote Client** - Present costs to client
-6. **Pre-Assessment** - Complete pre-admission assessment
-7. **Scheduled** - Admission scheduled (triggers email notification)
-8. **Admitted** - Client has been admitted
-9. **Non-Viable** - Client cannot proceed (with reason tracking)
+2. **Insurance Collection** - Gather insurance information
+3. **VOB Pending** - Verification of Benefits in progress
+4. **Quote Client** - Present costs to client
+5. **Pre-Assessment** - Complete pre-admission assessment
+6. **Scheduled** - Admission scheduled (triggers email notification)
+7. **Admitted** - Client has been admitted
+8. **Non-Viable** - Client cannot proceed (with reason tracking)
 
 ## Features
 
@@ -55,11 +54,14 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 - Auto-generated admission summaries
 
 ### Phase 2 Features (Recently Added)
-- **Analytics Dashboard** (`/analytics`): Conversion rates by referral source, non-viable reasons breakdown, stage distribution charts
+- **Analytics Dashboard** (`/analytics`): Conversion rates by referral source, non-viable reasons breakdown, stage distribution charts, BD rep performance tracking
 - **Advanced Search** (`/search`): Filter by date range, referral source, insurance provider, and stage
 - **CallTrackingMetrics Integration**: Webhook endpoint at `/api/webhooks/ctm` for automatic inquiry creation
 - **Email Notifications**: Automatic notifications when admissions are scheduled (requires SendGrid setup)
 - **Follow-up Reminders**: Dashboard alerts for inquiries pending in VOB/quote stages for 24+ hours
+- **Settings Page** (`/settings`): Configure notification emails per pipeline stage
+- **Referral Accounts** (`/accounts`): Manage referral source accounts with BD rep assignment, contacts, and activity logging
+- **BD Rep Activity Tracking**: Log face-to-face visits, phone calls, meetings with referral accounts
 
 ## API Endpoints
 
@@ -71,6 +73,21 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 - `PATCH /api/inquiries/:id` - Update inquiry
 - `DELETE /api/inquiries/:id` - Delete inquiry
 - `GET /api/auth/user` - Get current user
+- `GET /api/users` - List all users (for BD rep dropdown)
+- `GET /api/referral-accounts` - List all referral accounts
+- `POST /api/referral-accounts` - Create referral account
+- `GET /api/referral-accounts/:id` - Get referral account
+- `PATCH /api/referral-accounts/:id` - Update referral account
+- `DELETE /api/referral-accounts/:id` - Delete referral account
+- `GET /api/referral-accounts/:id/contacts` - List contacts for account
+- `POST /api/referral-accounts/:id/contacts` - Add contact to account
+- `PATCH /api/referral-contacts/:id` - Update contact
+- `DELETE /api/referral-contacts/:id` - Delete contact
+- `GET /api/referral-accounts/:id/activities` - List activities for account
+- `POST /api/referral-accounts/:id/activities` - Log activity for account
+- `GET /api/activities` - List activities by current user
+- `GET /api/notification-settings` - Get notification settings
+- `POST /api/notification-settings` - Save notification setting
 
 ### Public Endpoints
 - `POST /api/webhooks/ctm` - CallTrackingMetrics webhook (optionally secured with CTM_WEBHOOK_SECRET)
