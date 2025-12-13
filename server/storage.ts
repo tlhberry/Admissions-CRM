@@ -1,11 +1,23 @@
 import {
   users,
   inquiries,
+  referralAccounts,
+  referralContacts,
+  activityLogs,
+  notificationSettings,
   type User,
   type UpsertUser,
   type Inquiry,
   type InsertInquiry,
   type UpdateInquiry,
+  type ReferralAccount,
+  type InsertReferralAccount,
+  type ReferralContact,
+  type InsertReferralContact,
+  type ActivityLog,
+  type InsertActivityLog,
+  type NotificationSetting,
+  type InsertNotificationSetting,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL } from "drizzle-orm";
@@ -23,6 +35,7 @@ export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
   
   // Inquiry operations
   getInquiry(id: number): Promise<Inquiry | undefined>;
@@ -32,6 +45,32 @@ export interface IStorage {
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
   updateInquiry(id: number, data: UpdateInquiry): Promise<Inquiry | undefined>;
   deleteInquiry(id: number): Promise<void>;
+  
+  // Referral Account operations
+  getReferralAccount(id: number): Promise<ReferralAccount | undefined>;
+  getAllReferralAccounts(): Promise<ReferralAccount[]>;
+  getReferralAccountsByRep(userId: string): Promise<ReferralAccount[]>;
+  createReferralAccount(data: InsertReferralAccount): Promise<ReferralAccount>;
+  updateReferralAccount(id: number, data: Partial<InsertReferralAccount>): Promise<ReferralAccount | undefined>;
+  deleteReferralAccount(id: number): Promise<void>;
+  
+  // Referral Contact operations
+  getReferralContact(id: number): Promise<ReferralContact | undefined>;
+  getContactsByAccount(accountId: number): Promise<ReferralContact[]>;
+  createReferralContact(data: InsertReferralContact): Promise<ReferralContact>;
+  updateReferralContact(id: number, data: Partial<InsertReferralContact>): Promise<ReferralContact | undefined>;
+  deleteReferralContact(id: number): Promise<void>;
+  
+  // Activity Log operations
+  getActivityLog(id: number): Promise<ActivityLog | undefined>;
+  getActivityLogsByAccount(accountId: number): Promise<ActivityLog[]>;
+  getActivityLogsByUser(userId: string): Promise<ActivityLog[]>;
+  createActivityLog(data: InsertActivityLog): Promise<ActivityLog>;
+  
+  // Notification Settings operations
+  getNotificationSettings(): Promise<NotificationSetting[]>;
+  getNotificationSettingByStage(stageName: string): Promise<NotificationSetting | undefined>;
+  upsertNotificationSetting(data: InsertNotificationSetting): Promise<NotificationSetting>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -154,6 +193,114 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInquiry(id: number): Promise<void> {
     await db.delete(inquiries).where(eq(inquiries.id, id));
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(users.firstName);
+  }
+
+  // Referral Account operations
+  async getReferralAccount(id: number): Promise<ReferralAccount | undefined> {
+    const [account] = await db.select().from(referralAccounts).where(eq(referralAccounts.id, id));
+    return account;
+  }
+
+  async getAllReferralAccounts(): Promise<ReferralAccount[]> {
+    return db.select().from(referralAccounts).orderBy(desc(referralAccounts.createdAt));
+  }
+
+  async getReferralAccountsByRep(userId: string): Promise<ReferralAccount[]> {
+    return db.select().from(referralAccounts)
+      .where(eq(referralAccounts.assignedBdRepId, userId))
+      .orderBy(desc(referralAccounts.createdAt));
+  }
+
+  async createReferralAccount(data: InsertReferralAccount): Promise<ReferralAccount> {
+    const [account] = await db.insert(referralAccounts).values(data).returning();
+    return account;
+  }
+
+  async updateReferralAccount(id: number, data: Partial<InsertReferralAccount>): Promise<ReferralAccount | undefined> {
+    const [account] = await db.update(referralAccounts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(referralAccounts.id, id))
+      .returning();
+    return account;
+  }
+
+  async deleteReferralAccount(id: number): Promise<void> {
+    await db.delete(referralContacts).where(eq(referralContacts.accountId, id));
+    await db.delete(activityLogs).where(eq(activityLogs.accountId, id));
+    await db.delete(referralAccounts).where(eq(referralAccounts.id, id));
+  }
+
+  // Referral Contact operations
+  async getReferralContact(id: number): Promise<ReferralContact | undefined> {
+    const [contact] = await db.select().from(referralContacts).where(eq(referralContacts.id, id));
+    return contact;
+  }
+
+  async getContactsByAccount(accountId: number): Promise<ReferralContact[]> {
+    return db.select().from(referralContacts).where(eq(referralContacts.accountId, accountId));
+  }
+
+  async createReferralContact(data: InsertReferralContact): Promise<ReferralContact> {
+    const [contact] = await db.insert(referralContacts).values(data).returning();
+    return contact;
+  }
+
+  async updateReferralContact(id: number, data: Partial<InsertReferralContact>): Promise<ReferralContact | undefined> {
+    const [contact] = await db.update(referralContacts).set(data).where(eq(referralContacts.id, id)).returning();
+    return contact;
+  }
+
+  async deleteReferralContact(id: number): Promise<void> {
+    await db.delete(referralContacts).where(eq(referralContacts.id, id));
+  }
+
+  // Activity Log operations
+  async getActivityLog(id: number): Promise<ActivityLog | undefined> {
+    const [log] = await db.select().from(activityLogs).where(eq(activityLogs.id, id));
+    return log;
+  }
+
+  async getActivityLogsByAccount(accountId: number): Promise<ActivityLog[]> {
+    return db.select().from(activityLogs)
+      .where(eq(activityLogs.accountId, accountId))
+      .orderBy(desc(activityLogs.activityDate));
+  }
+
+  async getActivityLogsByUser(userId: string): Promise<ActivityLog[]> {
+    return db.select().from(activityLogs)
+      .where(eq(activityLogs.userId, userId))
+      .orderBy(desc(activityLogs.activityDate));
+  }
+
+  async createActivityLog(data: InsertActivityLog): Promise<ActivityLog> {
+    const [log] = await db.insert(activityLogs).values(data).returning();
+    return log;
+  }
+
+  // Notification Settings operations
+  async getNotificationSettings(): Promise<NotificationSetting[]> {
+    return db.select().from(notificationSettings);
+  }
+
+  async getNotificationSettingByStage(stageName: string): Promise<NotificationSetting | undefined> {
+    const [setting] = await db.select().from(notificationSettings)
+      .where(eq(notificationSettings.stageName, stageName));
+    return setting;
+  }
+
+  async upsertNotificationSetting(data: InsertNotificationSetting): Promise<NotificationSetting> {
+    const [setting] = await db.insert(notificationSettings)
+      .values(data)
+      .onConflictDoUpdate({
+        target: notificationSettings.stageName,
+        set: { ...data, updatedAt: new Date() },
+      })
+      .returning();
+    return setting;
   }
 }
 

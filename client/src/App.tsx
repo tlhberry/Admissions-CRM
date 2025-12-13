@@ -10,6 +10,8 @@ import NewInquiry from "@/pages/NewInquiry";
 import InquiryDetail from "@/pages/InquiryDetail";
 import Analytics from "@/pages/Analytics";
 import Search from "@/pages/Search";
+import Settings from "@/pages/Settings";
+import ReferralAccounts from "@/pages/ReferralAccounts";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -37,6 +39,8 @@ function Router() {
           <Route path="/inquiry/:id" component={InquiryDetail} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/search" component={Search} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/accounts" component={ReferralAccounts} />
         </>
       )}
       <Route component={NotFound} />

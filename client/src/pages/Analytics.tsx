@@ -29,7 +29,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import type { Inquiry, PipelineStage, ReferralSource, NonViableReason } from "@shared/schema";
+import type { Inquiry, PipelineStage, ReferralSource, NonViableReason, User } from "@shared/schema";
 import {
   stageDisplayNames,
   referralSourceDisplayNames,
@@ -56,6 +56,10 @@ export default function Analytics() {
 
   const { data: inquiries, isLoading } = useQuery<Inquiry[]>({
     queryKey: ["/api/inquiries"],
+  });
+
+  const { data: users } = useQuery<User[]>({
+    queryKey: ["/api/users"],
   });
 
   const totalInquiries = inquiries?.length || 0;
@@ -114,7 +118,6 @@ export default function Analytics() {
     
     const stageOrder: PipelineStage[] = [
       "inquiry",
-      "viability_check", 
       "insurance_collection",
       "vob_pending",
       "quote_client",
@@ -141,9 +144,39 @@ export default function Analytics() {
     });
   };
 
+  const getBdRepPerformanceData = () => {
+    if (!inquiries || !users) return [];
+    const repCounts: Record<string, { total: number; admitted: number; name: string }> = {};
+    
+    inquiries.forEach((inquiry) => {
+      const userId = inquiry.userId || "unassigned";
+      if (!repCounts[userId]) {
+        const user = users.find((u) => u.id === userId);
+        const name = user 
+          ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown"
+          : "Unassigned";
+        repCounts[userId] = { total: 0, admitted: 0, name };
+      }
+      repCounts[userId].total++;
+      if (inquiry.stage === "admitted") {
+        repCounts[userId].admitted++;
+      }
+    });
+
+    return Object.entries(repCounts)
+      .map(([id, data]) => ({
+        name: data.name,
+        total: data.total,
+        admitted: data.admitted,
+        conversionRate: data.total > 0 ? ((data.admitted / data.total) * 100).toFixed(1) : "0",
+      }))
+      .sort((a, b) => b.admitted - a.admitted);
+  };
+
   const referralData = getReferralSourceData();
   const nonViableData = getNonViableReasonsData();
   const stageData = getStageDropOffData();
+  const bdRepData = getBdRepPerformanceData();
 
   return (
     <div className="min-h-screen bg-background">
@@ -370,6 +403,55 @@ export default function Analytics() {
                   <Bar dataKey="current" fill="hsl(var(--primary))" name="Current Count" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="chart-bd-rep-performance">
+          <CardHeader>
+            <CardTitle className="text-lg">Admits by Team Member</CardTitle>
+            <CardDescription>
+              Performance tracking by user
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : bdRepData.length === 0 ? (
+              <p className="text-center text-muted-foreground py-12">
+                No data available
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-2 font-semibold">Team Member</th>
+                      <th className="text-center py-3 px-2 font-semibold">Total</th>
+                      <th className="text-center py-3 px-2 font-semibold">Admitted</th>
+                      <th className="text-right py-3 px-2 font-semibold">Conversion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bdRepData.map((row, index) => (
+                      <tr key={index} className="border-b last:border-b-0">
+                        <td className="py-3 px-2">{row.name}</td>
+                        <td className="text-center py-3 px-2">
+                          <Badge variant="secondary">{row.total}</Badge>
+                        </td>
+                        <td className="text-center py-3 px-2">
+                          <Badge variant="outline" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                            {row.admitted}
+                          </Badge>
+                        </td>
+                        <td className="text-right py-3 px-2 font-medium">
+                          {row.conversionRate}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>

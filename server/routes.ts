@@ -2,7 +2,16 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, type InquiryFilters } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertInquirySchema, updateInquirySchema, levelOfCareDisplayNames, type LevelOfCare } from "@shared/schema";
+import { 
+  insertInquirySchema, 
+  updateInquirySchema, 
+  levelOfCareDisplayNames, 
+  type LevelOfCare,
+  insertReferralAccountSchema,
+  insertReferralContactSchema,
+  insertActivityLogSchema,
+  insertNotificationSettingSchema,
+} from "@shared/schema";
 import { z } from "zod";
 import { emailService } from "./emailService";
 
@@ -300,6 +309,212 @@ export async function registerRoutes(
     } catch (error) {
       console.error("CTM test webhook error:", error);
       res.status(500).json({ message: "Failed to process test webhook" });
+    }
+  });
+
+  // Users route (for BD rep dropdown)
+  app.get("/api/users", isAuthenticated, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      res.json(allUsers);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Referral Account routes
+  app.get("/api/referral-accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getAllReferralAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching referral accounts:", error);
+      res.status(500).json({ message: "Failed to fetch referral accounts" });
+    }
+  });
+
+  app.post("/api/referral-accounts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const validatedData = insertReferralAccountSchema.parse({
+        ...req.body,
+        createdBy: userId,
+      });
+      const account = await storage.createReferralAccount(validatedData);
+      res.status(201).json(account);
+    } catch (error) {
+      console.error("Error creating referral account:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create referral account" });
+    }
+  });
+
+  app.get("/api/referral-accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid account ID" });
+      const account = await storage.getReferralAccount(id);
+      if (!account) return res.status(404).json({ message: "Account not found" });
+      res.json(account);
+    } catch (error) {
+      console.error("Error fetching referral account:", error);
+      res.status(500).json({ message: "Failed to fetch referral account" });
+    }
+  });
+
+  app.patch("/api/referral-accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid account ID" });
+      const account = await storage.updateReferralAccount(id, req.body);
+      if (!account) return res.status(404).json({ message: "Account not found" });
+      res.json(account);
+    } catch (error) {
+      console.error("Error updating referral account:", error);
+      res.status(500).json({ message: "Failed to update referral account" });
+    }
+  });
+
+  app.delete("/api/referral-accounts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid account ID" });
+      await storage.deleteReferralAccount(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting referral account:", error);
+      res.status(500).json({ message: "Failed to delete referral account" });
+    }
+  });
+
+  // Referral Contact routes
+  app.get("/api/referral-accounts/:id/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+      const contacts = await storage.getContactsByAccount(accountId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  app.post("/api/referral-accounts/:id/contacts", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+      const validatedData = insertReferralContactSchema.parse({
+        ...req.body,
+        accountId,
+      });
+      const contact = await storage.createReferralContact(validatedData);
+      res.status(201).json(contact);
+    } catch (error) {
+      console.error("Error creating contact:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create contact" });
+    }
+  });
+
+  app.patch("/api/referral-contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid contact ID" });
+      const contact = await storage.updateReferralContact(id, req.body);
+      if (!contact) return res.status(404).json({ message: "Contact not found" });
+      res.json(contact);
+    } catch (error) {
+      console.error("Error updating contact:", error);
+      res.status(500).json({ message: "Failed to update contact" });
+    }
+  });
+
+  app.delete("/api/referral-contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid contact ID" });
+      await storage.deleteReferralContact(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      res.status(500).json({ message: "Failed to delete contact" });
+    }
+  });
+
+  // Activity Log routes
+  app.get("/api/referral-accounts/:id/activities", isAuthenticated, async (req, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+      const activities = await storage.getActivityLogsByAccount(accountId);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
+    }
+  });
+
+  app.post("/api/referral-accounts/:id/activities", isAuthenticated, async (req: any, res) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+      const userId = req.user.claims.sub;
+      const validatedData = insertActivityLogSchema.parse({
+        ...req.body,
+        accountId,
+        userId,
+        activityDate: new Date(req.body.activityDate),
+      });
+      const activity = await storage.createActivityLog(validatedData);
+      res.status(201).json(activity);
+    } catch (error) {
+      console.error("Error creating activity:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create activity" });
+    }
+  });
+
+  app.get("/api/activities", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const activities = await storage.getActivityLogsByUser(userId);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching user activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
+    }
+  });
+
+  // Notification Settings routes
+  app.get("/api/notification-settings", isAuthenticated, async (req, res) => {
+    try {
+      const settings = await storage.getNotificationSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching notification settings:", error);
+      res.status(500).json({ message: "Failed to fetch notification settings" });
+    }
+  });
+
+  app.post("/api/notification-settings", isAuthenticated, async (req, res) => {
+    try {
+      const validatedData = insertNotificationSettingSchema.parse(req.body);
+      const setting = await storage.upsertNotificationSetting(validatedData);
+      res.status(201).json(setting);
+    } catch (error) {
+      console.error("Error saving notification setting:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to save notification setting" });
     }
   });
 

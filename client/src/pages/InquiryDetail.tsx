@@ -65,7 +65,6 @@ import { format } from "date-fns";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
-  viability_check: ClipboardCheck,
   insurance_collection: FileText,
   vob_pending: Clock,
   quote_client: DollarSign,
@@ -77,7 +76,6 @@ const stageIcons: Record<PipelineStage, typeof Phone> = {
 
 const stageColors: Record<PipelineStage, string> = {
   inquiry: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
-  viability_check: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
   insurance_collection: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
   vob_pending: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
   quote_client: "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300",
@@ -119,14 +117,6 @@ export default function InquiryDetail() {
       });
     },
   });
-
-  const handleViabilityDecision = (isViable: boolean) => {
-    if (isViable) {
-      updateMutation.mutate({ isViable: "yes", stage: "insurance_collection" });
-    } else {
-      setShowNonViableDialog(true);
-    }
-  };
 
   const handleNonViable = (reason: NonViableReason, notes: string) => {
     updateMutation.mutate({
@@ -327,9 +317,10 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
         </Card>
 
         {stage === "inquiry" && (
-          <ViabilitySection
-            onViable={() => handleViabilityDecision(true)}
-            onNonViable={() => handleViabilityDecision(false)}
+          <InsuranceForm
+            inquiry={inquiry}
+            onSubmit={(data) => updateMutation.mutate({ ...data, stage: "insurance_collection" })}
+            onNonViable={() => setShowNonViableDialog(true)}
             isPending={updateMutation.isPending}
           />
         )}
@@ -338,6 +329,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
           <InsuranceForm
             inquiry={inquiry}
             onSubmit={(data) => updateMutation.mutate({ ...data, stage: "vob_pending" })}
+            onNonViable={() => setShowNonViableDialog(true)}
             isPending={updateMutation.isPending}
           />
         )}
@@ -456,54 +448,6 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
   );
 }
 
-function ViabilitySection({
-  onViable,
-  onNonViable,
-  isPending,
-}: {
-  onViable: () => void;
-  onNonViable: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-xl">Viability Decision</CardTitle>
-        <CardDescription>
-          Is this caller a potential admission for our facility?
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col sm:flex-row gap-4">
-        <Button
-          size="lg"
-          className="flex-1 h-16 text-lg"
-          onClick={onViable}
-          disabled={isPending}
-          data-testid="button-viable"
-        >
-          {isPending ? (
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-          ) : (
-            <CheckCircle2 className="w-5 h-5 mr-2" />
-          )}
-          Viable - Continue
-        </Button>
-        <Button
-          size="lg"
-          variant="outline"
-          className="flex-1 h-16 text-lg border-destructive text-destructive hover:bg-destructive/10"
-          onClick={onNonViable}
-          disabled={isPending}
-          data-testid="button-non-viable"
-        >
-          <XCircle className="w-5 h-5 mr-2" />
-          Not Viable
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
 function NonViableDialog({
   open,
   onClose,
@@ -584,10 +528,12 @@ const insuranceSchema = z.object({
 function InsuranceForm({
   inquiry,
   onSubmit,
+  onNonViable,
   isPending,
 }: {
   inquiry: Inquiry;
   onSubmit: (data: z.infer<typeof insuranceSchema>) => void;
+  onNonViable: () => void;
   isPending: boolean;
 }) {
   const form = useForm({
@@ -692,22 +638,39 @@ function InsuranceForm({
               )}
             />
 
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full"
-              disabled={isPending}
-              data-testid="button-submit-insurance"
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Submit & Start VOB"
-              )}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                type="submit"
+                size="lg"
+                className="flex-1"
+                disabled={isPending}
+                data-testid="button-submit-insurance"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 mr-2" />
+                    Submit & Start VOB
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                className="flex-1 border-destructive text-destructive"
+                onClick={onNonViable}
+                disabled={isPending}
+                data-testid="button-mark-non-viable"
+              >
+                <XCircle className="w-5 h-5 mr-2" />
+                Not Viable
+              </Button>
+            </div>
           </form>
         </Form>
       </CardContent>

@@ -38,10 +38,9 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
-// Pipeline stages enum
+// Pipeline stages enum (viability_check removed - inquiry goes directly to insurance_collection)
 export const pipelineStages = [
   "inquiry",
-  "viability_check",
   "insurance_collection",
   "vob_pending",
   "quote_client",
@@ -187,7 +186,6 @@ export type UpdateInquiry = z.infer<typeof updateInquirySchema>;
 // Stage display names
 export const stageDisplayNames: Record<PipelineStage, string> = {
   inquiry: "New Inquiry",
-  viability_check: "Viability Check",
   insurance_collection: "Insurance Info",
   vob_pending: "VOB Pending",
   quote_client: "Quote Client",
@@ -228,3 +226,131 @@ export const levelOfCareDisplayNames: Record<LevelOfCare, string> = {
   iop: "Intensive Outpatient (IOP)",
   outpatient: "Outpatient",
 };
+
+// Referral account types
+export const accountTypes = [
+  "hospital",
+  "physician",
+  "therapist",
+  "counselor",
+  "court",
+  "employer",
+  "other",
+] as const;
+
+export type AccountType = typeof accountTypes[number];
+
+export const accountTypeDisplayNames: Record<AccountType, string> = {
+  hospital: "Hospital/Medical",
+  physician: "Physician Office",
+  therapist: "Therapist/Counselor",
+  counselor: "Counselor/Social Worker",
+  court: "Court/Legal",
+  employer: "Employer/EAP",
+  other: "Other",
+};
+
+// Referral Accounts table - BD rep assigned accounts
+export const referralAccounts = pgTable("referral_accounts", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 50 }),
+  address: text("address"),
+  phone: varchar("phone", { length: 50 }),
+  website: varchar("website", { length: 255 }),
+  notes: text("notes"),
+  assignedBdRepId: varchar("assigned_bd_rep_id").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertReferralAccountSchema = createInsertSchema(referralAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ReferralAccount = typeof referralAccounts.$inferSelect;
+export type InsertReferralAccount = z.infer<typeof insertReferralAccountSchema>;
+
+// Referral Contacts table - contacts within referral accounts
+export const referralContacts = pgTable("referral_contacts", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").references(() => referralAccounts.id).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  position: varchar("position", { length: 100 }),
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 255 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertReferralContactSchema = createInsertSchema(referralContacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ReferralContact = typeof referralContacts.$inferSelect;
+export type InsertReferralContact = z.infer<typeof insertReferralContactSchema>;
+
+// Activity types for BD rep tracking
+export const activityTypes = [
+  "face_to_face",
+  "phone_call",
+  "email",
+  "meeting",
+  "lunch",
+  "presentation",
+  "other",
+] as const;
+
+export type ActivityType = typeof activityTypes[number];
+
+export const activityTypeDisplayNames: Record<ActivityType, string> = {
+  face_to_face: "Face-to-Face Visit",
+  phone_call: "Phone Call",
+  email: "Email",
+  meeting: "Meeting",
+  lunch: "Lunch/Coffee",
+  presentation: "Presentation",
+  other: "Other",
+};
+
+// Activity Logs table - BD rep activity tracking
+export const activityLogs = pgTable("activity_logs", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").references(() => referralAccounts.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  activityType: varchar("activity_type", { length: 50 }).notNull(),
+  notes: text("notes"),
+  activityDate: timestamp("activity_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ActivityLog = typeof activityLogs.$inferSelect;
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+
+// Notification Settings table - admin email configuration per stage
+export const notificationSettings = pgTable("notification_settings", {
+  id: serial("id").primaryKey(),
+  stageName: varchar("stage_name", { length: 50 }).notNull().unique(),
+  emailAddresses: text("email_addresses"),
+  enabled: varchar("enabled", { length: 10 }).default("no"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertNotificationSettingSchema = createInsertSchema(notificationSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type NotificationSetting = typeof notificationSettings.$inferSelect;
+export type InsertNotificationSetting = z.infer<typeof insertNotificationSettingSchema>;

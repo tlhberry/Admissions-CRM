@@ -33,6 +33,8 @@ import {
   Search,
   AlertTriangle,
   PhoneIncoming,
+  Settings,
+  Building2,
 } from "lucide-react";
 import type { Inquiry, PipelineStage } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
@@ -42,7 +44,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
-  viability_check: ClipboardCheck,
   insurance_collection: FileText,
   vob_pending: Clock,
   quote_client: DollarSign,
@@ -54,7 +55,6 @@ const stageIcons: Record<PipelineStage, typeof Phone> = {
 
 const stageColors: Record<PipelineStage, string> = {
   inquiry: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
-  viability_check: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
   insurance_collection: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
   vob_pending: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
   quote_client: "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300",
@@ -96,7 +96,6 @@ export default function Dashboard() {
 
   const activeStages: PipelineStage[] = [
     "inquiry",
-    "viability_check",
     "insurance_collection",
     "vob_pending",
     "quote_client",
@@ -207,6 +206,15 @@ export default function Dashboard() {
                   <p className="text-sm font-medium">{user?.firstName || "User"}</p>
                   <p className="text-xs text-muted-foreground">{user?.email}</p>
                 </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/accounts")} className="cursor-pointer" data-testid="menu-accounts">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Referral Accounts
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer" data-testid="menu-settings">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <a href="/api/logout" className="cursor-pointer" data-testid="button-logout">
