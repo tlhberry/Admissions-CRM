@@ -185,6 +185,7 @@ export const inquiries = pgTable("inquiries", {
   // VOB Information
   vobStatus: varchar("vob_status", { length: 50 }),
   vobDetails: text("vob_details"),
+  vobFileUrl: text("vob_file_url"),
   coverageDetails: text("coverage_details"),
   quotedCost: varchar("quoted_cost", { length: 100 }),
   clientResponsibility: text("client_responsibility"),

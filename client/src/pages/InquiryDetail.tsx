@@ -1022,6 +1022,7 @@ const vobSchema = z.object({
   coverageDetails: z.string().optional(),
   quotedCost: z.string().optional(),
   clientResponsibility: z.string().optional(),
+  vobFileUrl: z.string().optional(),
 });
 
 function VOBForm({
@@ -1033,6 +1034,12 @@ function VOBForm({
   onSubmit: (data: z.infer<typeof vobSchema>) => void;
   isPending: boolean;
 }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<{ url: string; filename: string } | null>(
+    inquiry.vobFileUrl ? { url: inquiry.vobFileUrl, filename: "VOB Document" } : null
+  );
+  const { toast } = useToast();
+
   const form = useForm({
     resolver: zodResolver(vobSchema),
     defaultValues: {
@@ -1040,8 +1047,39 @@ function VOBForm({
       coverageDetails: inquiry.coverageDetails || "",
       quotedCost: inquiry.quotedCost || "",
       clientResponsibility: inquiry.clientResponsibility || "",
+      vobFileUrl: inquiry.vobFileUrl || "",
     },
   });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const data = await response.json();
+      setUploadedFile({ url: data.url, filename: data.filename });
+      form.setValue("vobFileUrl", data.url);
+      toast({ title: "File uploaded", description: data.filename });
+    } catch (error) {
+      toast({ title: "Upload failed", description: "Please try again", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <Card>
@@ -1137,6 +1175,35 @@ function VOBForm({
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="space-y-2">
+              <FormLabel className="text-base">VOB Document (Optional)</FormLabel>
+              <div className="flex items-center gap-4">
+                <Input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="flex-1"
+                  data-testid="input-vob-file"
+                />
+                {uploading && <Loader2 className="w-5 h-5 animate-spin" />}
+              </div>
+              {uploadedFile && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="w-4 h-4" />
+                  <a 
+                    href={uploadedFile.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="hover:underline text-primary"
+                    data-testid="link-vob-file"
+                  >
+                    {uploadedFile.filename}
+                  </a>
+                </div>
+              )}
             </div>
 
             <Button
