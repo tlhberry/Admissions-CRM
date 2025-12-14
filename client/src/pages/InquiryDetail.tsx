@@ -53,7 +53,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason } from "@shared/schema";
+import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource } from "@shared/schema";
 import {
   stageDisplayNames,
   nonViableReasons,
@@ -62,6 +62,7 @@ import {
   levelOfCareDisplayNames,
   lostReasons,
   lostReasonDisplayNames,
+  onlineReferralSourceDisplayNames,
 } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -100,6 +101,27 @@ export default function InquiryDetail() {
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
   });
+
+  const { data: referralAccounts } = useQuery<ReferralAccount[]>({
+    queryKey: ["/api/referral-accounts"],
+  });
+
+  // Helper to get referral source display
+  const getReferralSourceDisplay = () => {
+    if (!inquiry) return "—";
+    
+    if (inquiry.referralOrigin === "account" && inquiry.referralAccountId) {
+      const account = referralAccounts?.find(a => a.id === inquiry.referralAccountId);
+      return account?.name || `Account #${inquiry.referralAccountId}`;
+    }
+    
+    if (inquiry.referralOrigin === "online" && inquiry.onlineSource) {
+      return onlineReferralSourceDisplayNames[inquiry.onlineSource as OnlineReferralSource] || inquiry.onlineSource;
+    }
+    
+    // Fallback to legacy referralSource
+    return inquiry.referralSource || "—";
+  };
 
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<Inquiry>) => {
@@ -270,7 +292,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Referral Source</p>
-                <p className="font-medium">{inquiry.referralSource || "—"}</p>
+                <p className="font-medium" data-testid="text-referral-source">{getReferralSourceDisplay()}</p>
               </div>
               {inquiry.initialNotes && (
                 <div className="sm:col-span-2">

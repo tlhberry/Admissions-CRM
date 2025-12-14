@@ -1,13 +1,12 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -27,17 +26,37 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, Phone, Heart, Loader2 } from "lucide-react";
-import { referralSources, referralSourceDisplayNames } from "@shared/schema";
-import type { Inquiry } from "@shared/schema";
+import {
+  onlineReferralSources,
+  onlineReferralSourceDisplayNames,
+  accountTypeDisplayNames,
+  type ReferralAccount,
+  type Inquiry,
+  type OnlineReferralSource,
+  type AccountType,
+} from "@shared/schema";
 
 const newInquirySchema = z.object({
   callerName: z.string().min(1, "Caller name is required"),
   clientName: z.string().optional(),
   phoneNumber: z.string().min(1, "Phone number is required"),
   email: z.string().email().optional().or(z.literal("")),
-  referralSource: z.string().min(1, "Referral source is required"),
+  referralOrigin: z.enum(["account", "online"], { required_error: "Please select referral type" }),
+  referralAccountId: z.number().optional(),
+  onlineSource: z.string().optional(),
   referralDetails: z.string().optional(),
   initialNotes: z.string().optional(),
+}).refine((data) => {
+  if (data.referralOrigin === "account" && !data.referralAccountId) {
+    return false;
+  }
+  if (data.referralOrigin === "online" && !data.onlineSource) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Please select a specific referral source",
+  path: ["referralAccountId"],
 });
 
 type NewInquiryForm = z.infer<typeof newInquirySchema>;
@@ -46,6 +65,10 @@ export default function NewInquiry() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  const { data: referralAccounts } = useQuery<ReferralAccount[]>({
+    queryKey: ["/api/referral-accounts"],
+  });
+
   const form = useForm<NewInquiryForm>({
     resolver: zodResolver(newInquirySchema),
     defaultValues: {
@@ -53,16 +76,28 @@ export default function NewInquiry() {
       clientName: "",
       phoneNumber: "",
       email: "",
-      referralSource: "",
+      referralOrigin: undefined,
+      referralAccountId: undefined,
+      onlineSource: "",
       referralDetails: "",
       initialNotes: "",
     },
   });
 
+  const referralOrigin = form.watch("referralOrigin");
+
   const createMutation = useMutation({
     mutationFn: async (data: NewInquiryForm) => {
       const response = await apiRequest("POST", "/api/inquiries", {
-        ...data,
+        callerName: data.callerName,
+        clientName: data.clientName,
+        phoneNumber: data.phoneNumber,
+        email: data.email,
+        referralOrigin: data.referralOrigin,
+        referralAccountId: data.referralOrigin === "account" ? data.referralAccountId : null,
+        onlineSource: data.referralOrigin === "online" ? data.onlineSource : null,
+        referralDetails: data.referralDetails,
+        initialNotes: data.initialNotes,
         stage: "inquiry",
       });
       return response.json() as Promise<Inquiry>;
@@ -214,28 +249,94 @@ export default function NewInquiry() {
 
                 <FormField
                   control={form.control}
-                  name="referralSource"
+                  name="referralOrigin"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base">How did they find us? *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <FormLabel className="text-base">Referral Type *</FormLabel>
+                      <Select 
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          form.setValue("referralAccountId", undefined);
+                          form.setValue("onlineSource", "");
+                        }} 
+                        value={field.value}
+                      >
                         <FormControl>
-                          <SelectTrigger className="text-lg h-12" data-testid="select-referral-source">
-                            <SelectValue placeholder="Select referral source" />
+                          <SelectTrigger className="text-lg h-12" data-testid="select-referral-origin">
+                            <SelectValue placeholder="Select referral type" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {referralSources.map((source) => (
-                            <SelectItem key={source} value={source} className="text-base">
-                              {referralSourceDisplayNames[source]}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="account" className="text-base">Referral Account</SelectItem>
+                          <SelectItem value="online" className="text-base">Online / Marketing</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {referralOrigin === "account" && (
+                  <FormField
+                    control={form.control}
+                    name="referralAccountId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Referral Account *</FormLabel>
+                        <Select 
+                          onValueChange={(v) => field.onChange(parseInt(v))} 
+                          value={field.value?.toString() || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="text-lg h-12" data-testid="select-referral-account">
+                              <SelectValue placeholder="Select referral account" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {referralAccounts?.map((account) => (
+                              <SelectItem key={account.id} value={account.id.toString()} className="text-base">
+                                {account.name}
+                                {account.type && (
+                                  <span className="text-muted-foreground ml-2">
+                                    ({accountTypeDisplayNames[account.type as AccountType] || account.type})
+                                  </span>
+                                )}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {referralOrigin === "online" && (
+                  <FormField
+                    control={form.control}
+                    name="onlineSource"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Online Source *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger className="text-lg h-12" data-testid="select-online-source">
+                              <SelectValue placeholder="Select online source" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {onlineReferralSources.map((source) => (
+                              <SelectItem key={source} value={source} className="text-base">
+                                {onlineReferralSourceDisplayNames[source as OnlineReferralSource]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}
