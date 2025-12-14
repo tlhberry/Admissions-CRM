@@ -1,0 +1,48 @@
+REPLIT BRANDING UPDATE PROMPT — READ CAREFULLY
+
+This prompt is for BRANDING ONLY.
+DO NOT change any application logic, flows, features, database structure, or functionality.
+Only apply colors, fonts, and logo usage as described below.
+
+PRODUCT NAME:
+AdmitSimple
+
+LOGO USAGE (USE EXACT FILES PROVIDED):
+- Light mode logo: admit-simple_logo_day.svg
+- Dark mode logo: admit-simple_logo_night.svg
+
+Brand style:
+- Inspired by classic 1950s Topps sports cards
+- Professional, healthcare-safe, executive-friendly
+- Vintage feel without playful or gimmicky elements
+
+Color system:
+Light mode:
+- Background: cream / off-white
+- Primary text: navy
+- Accent: muted red
+Dark mode:
+- Background: deep navy
+- Primary text: cream
+- Accent: muted red
+
+Typography:
+- Headings: vintage serif-inspired feel
+- Body and UI text: clean, modern sans-serif
+- Keep spacing tight and efficient
+
+UI visual rules:
+- Treat each patient intake visually as a clean “card”
+- Subtle borders, generous padding
+- No gradients, no shadows, no animations
+- Minimal icons only if absolutely necessary
+
+STRICT RULES:
+- Do NOT modify workflows
+- Do NOT rename stages
+- Do NOT add or remove fields
+- Do NOT alter navigation or layout structure
+- Do NOT introduce new branding concepts
+
+GOAL:
+Apply a vintage sports-card inspired visual identity to the existing app while preserving its current behavior exactly.

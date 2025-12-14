@@ -1,25 +1,32 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "@/hooks/useTheme";
 import { 
   Phone, 
   ClipboardCheck, 
   Shield, 
   Calendar,
-  ArrowRight,
-  Heart
+  ArrowRight
 } from "lucide-react";
+import logoDay from "@assets/IMG_8329_1765685525841.png";
+import logoNight from "@assets/IMG_8330_1765685525842.png";
 
 export default function Landing() {
+  const theme = useTheme();
+  
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary text-primary-foreground">
-              <Heart className="w-5 h-5" />
-            </div>
-            <h1 className="text-xl font-bold">Admissions CRM</h1>
+            <img 
+              src={theme === "dark" ? logoNight : logoDay} 
+              alt="AdmitSimple" 
+              className="h-10 w-auto"
+              data-testid="img-logo"
+            />
+            <h1 className="text-xl font-bold">AdmitSimple</h1>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -139,7 +146,7 @@ export default function Landing() {
 
       <footer className="border-t py-8 px-4">
         <div className="container mx-auto max-w-6xl text-center text-muted-foreground text-sm">
-          <p>Admissions CRM for Addiction Treatment Centers</p>
+          <p>AdmitSimple - Admissions CRM for Addiction Treatment Centers</p>
         </div>
       </footer>
     </div>
