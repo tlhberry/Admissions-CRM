@@ -1,0 +1,105 @@
+THIS PROMPT ADDS FORMS ONLY.
+DO NOT MODIFY EXISTING PIPELINE STAGES, LOGIC, DATABASE SCHEMA, OR WORKFLOWS
+EXCEPT WHERE EXPLICITLY STATED BELOW.
+
+PRODUCT:
+AdmitSimple admissions CRM
+
+GOAL:
+Add a Pre-Assessment stage to the existing pipeline and recreate three clinical forms
+exactly as provided in the uploaded PDF titled:
+“Prescreenprecertnursinadmission11.20.25.pdf”
+
+--------------------------------
+PIPELINE CHANGE (LIMITED)
+--------------------------------
+- Add a new pipeline stage named: Pre-Assessment
+- This stage appears after VOB and before Schedule Admit
+- No other stages are renamed, removed, or reordered
+
+--------------------------------
+PRE-ASSESSMENT MODULE
+--------------------------------
+Inside the Pre-Assessment stage, create a “Pre-Assessment Forms” section
+containing THREE SEPARATE FORMS:
+
+FORM 1:
+RB Pre-Cert / Clinical Pre-Assessment
+
+FORM 2:
+Nursing Admission Assessment
+
+FORM 3:
+Pre-Screening Form
+
+Each form must:
+- Be saved independently
+- Have its own completion status
+- Be tied to the patient/inquiry record
+- Autosave on field change
+
+--------------------------------
+FORM RECREATION RULES
+--------------------------------
+Recreate ALL questions from the PDF exactly, using appropriate field types:
+
+- Yes/No questions → radio buttons
+- Checkboxes on the form → real checkbox inputs
+- Multi-select symptoms → checkbox groups
+- Substance use history → table-style inputs with columns:
+  Substance | Last Used | First Used | Frequency | Amount | Route | Method
+- Narrative sections → multi-line text areas
+- Date/Time fields → date/time pickers
+- Numeric scales (cravings, pain scale) → radio buttons or numeric selector
+
+Do NOT summarize or combine questions.
+Do NOT remove clinical language.
+Match the paper form structure as closely as possible.
+
+--------------------------------
+FORM-SPECIFIC NOTES
+--------------------------------
+
+RB PRE-CERT / CLINICAL FORM:
+- Substance use history table
+- Treatment history
+- Severity of illness
+- Withdrawal symptoms (checkboxes)
+- Psychosocial and medical sections
+
+NURSING ADMISSION ASSESSMENT:
+- Vitals section
+- Allergies
+- Review of systems
+- Pain screen
+- Suicide risk questionnaire
+- Nutritional screen
+
+PRE-SCREENING FORM:
+- Referral source checkboxes
+- Level of care interest
+- Legal questions
+- Mental health and substance history
+- Program recommendation fields
+
+--------------------------------
+LOGIC (MINIMAL, SAFE)
+--------------------------------
+- Each form can be saved partially
+- Mark form as Complete only when required fields are filled
+- Pre-Assessment stage shows “Complete” only when all three forms are complete
+
+--------------------------------
+STRICT RULES
+--------------------------------
+- DO NOT alter any existing app logic
+- DO NOT modify admissions workflow
+- DO NOT rename existing fields or stages
+- DO NOT introduce new branding
+- DO NOT redesign UI beyond adding the forms
+
+--------------------------------
+OUTPUT
+--------------------------------
+The result should feel like the paper forms,
+but digital, clean, and easy for nurses and admissions staff to complete quickly.
