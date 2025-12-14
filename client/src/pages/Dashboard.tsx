@@ -140,6 +140,25 @@ export default function Dashboard() {
 
   const followUpReminders = getFollowUpReminders();
 
+  // Check if inquiry has complete data for its current stage
+  const isStageComplete = (inquiry: Inquiry): boolean => {
+    const stage = inquiry.stage as PipelineStage;
+    switch (stage) {
+      case "inquiry":
+        return !!(inquiry.insuranceProvider && inquiry.insurancePolicyId);
+      case "vob_pending":
+        return !!inquiry.vobCompletedAt;
+      case "quote_client":
+        return !!inquiry.quoteAccepted;
+      case "pre_assessment":
+        return inquiry.preAssessmentCompleted === "yes";
+      case "scheduled":
+        return !!(inquiry.expectedAdmitDate && inquiry.levelOfCare);
+      default:
+        return true;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -364,28 +383,42 @@ export default function Dashboard() {
                       No inquiries at this stage
                     </p>
                   ) : (
-                    stageInquiries.slice(0, 5).map((inquiry) => (
-                      <button
-                        key={inquiry.id}
-                        onClick={() => navigate(`/inquiry/${inquiry.id}`)}
-                        className="w-full text-left p-3 rounded-lg border bg-card hover-elevate active-elevate-2 transition-colors"
-                        data-testid={`inquiry-card-${inquiry.id}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium truncate">
-                              {inquiry.clientName || inquiry.callerName || "Unknown Caller"}
-                            </p>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {inquiry.callDateTime 
-                                ? format(new Date(inquiry.callDateTime), "MMM d, h:mm a")
-                                : "No date"}
-                            </p>
+                    stageInquiries.slice(0, 5).map((inquiry) => {
+                      const complete = isStageComplete(inquiry);
+                      return (
+                        <button
+                          key={inquiry.id}
+                          onClick={() => navigate(`/inquiry/${inquiry.id}`)}
+                          className="w-full text-left p-3 rounded-lg border bg-card hover-elevate active-elevate-2 transition-colors"
+                          data-testid={`inquiry-card-${inquiry.id}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                    complete 
+                                      ? "bg-green-500" 
+                                      : "bg-amber-500"
+                                  }`}
+                                  title={complete ? "Stage complete" : "Needs attention"}
+                                  data-testid={`status-dot-${inquiry.id}`}
+                                />
+                                <p className="font-medium truncate">
+                                  {inquiry.clientName || inquiry.callerName || "Unknown Caller"}
+                                </p>
+                              </div>
+                              <p className="text-sm text-muted-foreground truncate pl-4">
+                                {inquiry.callDateTime 
+                                  ? format(new Date(inquiry.callDateTime), "MMM d, h:mm a")
+                                  : "No date"}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                           </div>
-                          <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                        </div>
-                      </button>
-                    ))
+                        </button>
+                      );
+                    })
                   )}
                   {!isLoading && stageInquiries.length > 5 && (
                     <p className="text-sm text-muted-foreground text-center pt-2">
