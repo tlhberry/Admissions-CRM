@@ -171,11 +171,11 @@ export default function NewInquiry() {
                     name="callerName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-base">Caller Name *</FormLabel>
+                        <FormLabel className="text-base">Name (Client or Family Member) *</FormLabel>
                         <FormControl>
                           <Input
                             {...field}
-                            placeholder="Who is calling?"
+                            placeholder="Client or family member calling"
                             className="text-lg h-12"
                             data-testid="input-caller-name"
                           />
@@ -190,11 +190,11 @@ export default function NewInquiry() {
                     name="clientName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-base">Client Name</FormLabel>
+                        <FormLabel className="text-base">Client Name (if different)</FormLabel>
                         <FormControl>
                           <Input
                             {...field}
-                            placeholder="If different from caller"
+                            placeholder="Leave blank if caller is the client"
                             className="text-lg h-12"
                             data-testid="input-client-name"
                           />
