@@ -329,6 +329,46 @@ export async function registerRoutes(
     }
   });
 
+  // Bed Board metrics endpoint
+  app.get("/api/bed-metrics", isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const admittedCount = await storage.getAdmittedCount(companyId);
+      const totalBeds = company.totalBeds ?? 32;
+      const bedsAvailable = Math.max(totalBeds - admittedCount, 0);
+      
+      res.json({
+        totalBeds,
+        currentlyAdmitted: admittedCount,
+        bedsAvailable,
+      });
+    } catch (error) {
+      console.error("Error fetching bed metrics:", error);
+      res.status(500).json({ message: "Failed to fetch bed metrics" });
+    }
+  });
+
+  // Get admitted clients for Bed Board
+  app.get("/api/admitted-clients", isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const admittedInquiries = await storage.getAdmittedInquiries(companyId);
+      res.json(admittedInquiries);
+    } catch (error) {
+      console.error("Error fetching admitted clients:", error);
+      res.status(500).json({ message: "Failed to fetch admitted clients" });
+    }
+  });
+
   // Serve uploaded files
   const express = await import("express");
   app.use("/uploads", express.default.static(uploadDir));

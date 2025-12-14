@@ -39,6 +39,7 @@ import {
   UserX,
   ClipboardList,
   UserCog,
+  Bed,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, Company } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
@@ -80,6 +81,15 @@ export default function Dashboard() {
   const { data: company, error: companyError } = useQuery<Company>({
     queryKey: ["/api/company"],
     retry: false, // Don't retry on 404 - user may not have a company yet
+  });
+
+  const { data: bedMetrics, isLoading: bedMetricsLoading, error: bedMetricsError } = useQuery<{
+    totalBeds: number;
+    currentlyAdmitted: number;
+    bedsAvailable: number;
+  }>({
+    queryKey: ["/api/bed-metrics"],
+    enabled: !!company,
   });
 
   const testCTMWebhook = useMutation({
@@ -307,6 +317,53 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {company && (
+          <button
+            onClick={() => navigate("/bed-board")}
+            className="w-full mb-8"
+            data-testid="card-bed-board"
+          >
+            <Card className="overflow-visible border-primary/20 hover-elevate active-elevate-2">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-primary/10 text-primary flex-shrink-0">
+                    <Bed className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg">Bed Board</h3>
+                    <p className="text-sm text-muted-foreground">Real-time bed availability</p>
+                  </div>
+                  <div className="flex items-center gap-6 flex-shrink-0">
+                    {bedMetricsLoading ? (
+                      <Skeleton className="h-10 w-48" />
+                    ) : bedMetricsError ? (
+                      <p className="text-sm text-muted-foreground">Unable to load metrics</p>
+                    ) : (
+                      <>
+                        <div className="text-center">
+                          <p className="text-2xl font-bold">{bedMetrics?.totalBeds ?? 0}</p>
+                          <p className="text-xs text-muted-foreground">Total Beds</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{bedMetrics?.currentlyAdmitted ?? 0}</p>
+                          <p className="text-xs text-muted-foreground">Admitted</p>
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-2xl font-bold ${(bedMetrics?.bedsAvailable ?? 0) <= 2 ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                            {bedMetrics?.bedsAvailable ?? 0}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Available</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+          </button>
+        )}
 
         {followUpReminders.length > 0 && (
           <Card className="mb-8 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20" data-testid="card-follow-up-reminders">

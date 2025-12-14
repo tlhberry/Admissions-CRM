@@ -35,7 +35,7 @@ import {
   type InsertAuditLog,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, ilike, or, SQL } from "drizzle-orm";
+import { eq, desc, and, gte, lte, ilike, or, SQL, count } from "drizzle-orm";
 
 export interface InquiryFilters {
   search?: string;
@@ -106,6 +106,10 @@ export interface IStorage {
   // Audit log operations (HIPAA compliance)
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(companyId: number, limit?: number): Promise<AuditLog[]>;
+  
+  // Bed Board operations
+  getAdmittedCount(companyId: number): Promise<number>;
+  getAdmittedInquiries(companyId: number): Promise<Inquiry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -463,6 +467,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(auditLogs.companyId, companyId))
       .orderBy(desc(auditLogs.createdAt))
       .limit(limit);
+  }
+
+  // Bed Board operations
+  async getAdmittedCount(companyId: number): Promise<number> {
+    const [result] = await db.select({ count: count() })
+      .from(inquiries)
+      .where(and(eq(inquiries.companyId, companyId), eq(inquiries.stage, "admitted")));
+    return result?.count ?? 0;
+  }
+
+  async getAdmittedInquiries(companyId: number): Promise<Inquiry[]> {
+    return db.select().from(inquiries)
+      .where(and(eq(inquiries.companyId, companyId), eq(inquiries.stage, "admitted")))
+      .orderBy(desc(inquiries.actualAdmitDate));
   }
 }
 

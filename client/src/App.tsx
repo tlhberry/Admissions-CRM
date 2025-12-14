@@ -14,6 +14,7 @@ import Settings from "@/pages/Settings";
 import ReferralAccounts from "@/pages/ReferralAccounts";
 import Reports from "@/pages/Reports";
 import AdminSettings from "@/pages/AdminSettings";
+import BedBoard from "@/pages/BedBoard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -45,6 +46,7 @@ function Router() {
           <Route path="/accounts" component={ReferralAccounts} />
           <Route path="/reports" component={Reports} />
           <Route path="/admin" component={AdminSettings} />
+          <Route path="/bed-board" component={BedBoard} />
         </>
       )}
       <Route component={NotFound} />
