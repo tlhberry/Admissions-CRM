@@ -110,6 +110,9 @@ export interface IStorage {
   // Bed Board operations
   getAdmittedCount(companyId: number): Promise<number>;
   getAdmittedInquiries(companyId: number): Promise<Inquiry[]>;
+  
+  // HIPAA Activity Tracking
+  updateLastActivity(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -481,6 +484,13 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(inquiries)
       .where(and(eq(inquiries.companyId, companyId), eq(inquiries.stage, "admitted")))
       .orderBy(desc(inquiries.actualAdmitDate));
+  }
+  
+  // HIPAA Activity Tracking
+  async updateLastActivity(userId: string): Promise<void> {
+    await db.update(users)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(users.id, userId));
   }
 }
 

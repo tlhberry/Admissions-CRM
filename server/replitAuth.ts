@@ -18,25 +18,28 @@ const getOidcConfig = memoize(
   { maxAge: 3600 * 1000 }
 );
 
+// HIPAA-compliant session timeout (15 minutes of inactivity)
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
     createTableIfMissing: false,
-    ttl: sessionTtl,
+    ttl: SESSION_TIMEOUT_MS / 1000, // TTL in seconds
     tableName: "sessions",
   });
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
-    resave: false,
+    resave: true, // Touch session on each request to extend timeout
     saveUninitialized: false,
+    rolling: true, // Reset cookie expiration on each request
     cookie: {
       httpOnly: true,
       secure: true,
       sameSite: "lax",
-      maxAge: sessionTtl,
+      maxAge: SESSION_TIMEOUT_MS, // 15 minutes
     },
   });
 }
@@ -184,6 +187,13 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const now = Math.floor(Date.now() / 1000);
   if (now <= user.expires_at) {
+    // Update last activity timestamp for HIPAA compliance tracking
+    const userId = user.claims?.sub;
+    if (userId) {
+      storage.updateLastActivity(userId).catch(err => 
+        console.error("Failed to update last activity:", err)
+      );
+    }
     return next();
   }
 

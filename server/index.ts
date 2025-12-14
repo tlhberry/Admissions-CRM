@@ -58,6 +58,8 @@ const loginLimiter = rateLimit({
 
 app.use("/api/", apiLimiter);
 app.use("/api/login", loginLimiter);
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/2fa/verify", loginLimiter);
 
 declare module "http" {
   interface IncomingMessage {

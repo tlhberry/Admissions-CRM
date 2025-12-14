@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, logAudit, type InquiryFilters } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import authRoutes from "./auth/authRoutes";
 import { 
   insertInquirySchema, 
   updateInquirySchema, 
@@ -276,7 +277,10 @@ export async function registerRoutes(
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
+  // HIPAA-compliant email/password + 2FA auth routes
+  app.use("/api/auth", authRoutes);
+
+  // Auth routes (legacy Replit auth endpoints)
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
