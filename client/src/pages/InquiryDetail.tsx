@@ -52,6 +52,7 @@ import {
   UserCheck,
   Copy,
   Check,
+  Pencil,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource } from "@shared/schema";
 import {
@@ -97,6 +98,8 @@ export default function InquiryDetail() {
   const [showNonViableDialog, setShowNonViableDialog] = useState(false);
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
@@ -266,8 +269,69 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stageColors[stage!]}`}>
                 <StageIcon className="w-6 h-6" />
               </div>
-              <div>
-                <CardTitle className="text-xl">{stageDisplayNames[stage!]}</CardTitle>
+              <div className="flex-1">
+                {editingName ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={tempName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      className="text-xl font-semibold h-10"
+                      placeholder="Enter name..."
+                      autoFocus
+                      data-testid="input-inquiry-name"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          updateMutation.mutate({ callerName: tempName });
+                          setEditingName(false);
+                        } else if (e.key === "Escape") {
+                          setEditingName(false);
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        updateMutation.mutate({ callerName: tempName });
+                        setEditingName(false);
+                      }}
+                      data-testid="button-save-name"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingName(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <CardTitle 
+                      className="text-xl cursor-pointer hover-elevate rounded px-1 -mx-1"
+                      onClick={() => {
+                        setTempName(inquiry.callerName || "");
+                        setEditingName(true);
+                      }}
+                      data-testid="text-inquiry-name"
+                    >
+                      {inquiry.callerName || stageDisplayNames[stage!]}
+                    </CardTitle>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        setTempName(inquiry.callerName || "");
+                        setEditingName(true);
+                      }}
+                      data-testid="button-edit-name"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
                 <CardDescription>
                   {inquiry.callDateTime && (
                     <>Called {format(new Date(inquiry.callDateTime), "MMM d, yyyy 'at' h:mm a")}</>
