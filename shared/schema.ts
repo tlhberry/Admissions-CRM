@@ -86,7 +86,38 @@ export const lostReasonDisplayNames: Record<LostReason, string> = {
   other: "Other",
 };
 
-// Referral sources
+// Online referral sources (for digital/marketing channels)
+export const onlineReferralSources = [
+  "google_ppc",
+  "google_organic",
+  "facebook",
+  "instagram",
+  "website",
+  "alumni_referral",
+  "word_of_mouth",
+  "phone_book",
+  "other_online",
+] as const;
+
+export type OnlineReferralSource = typeof onlineReferralSources[number];
+
+export const onlineReferralSourceDisplayNames: Record<OnlineReferralSource, string> = {
+  google_ppc: "Google PPC (Paid)",
+  google_organic: "Google Organic",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  website: "Website Direct",
+  alumni_referral: "Alumni Referral",
+  word_of_mouth: "Word of Mouth",
+  phone_book: "Phone Book",
+  other_online: "Other Online",
+};
+
+// Referral origin - distinguishes account vs online referral
+export const referralOrigins = ["account", "online"] as const;
+export type ReferralOrigin = typeof referralOrigins[number];
+
+// Legacy referral sources (kept for backward compatibility)
 export const referralSources = [
   "google",
   "facebook",
@@ -128,7 +159,10 @@ export const inquiries = pgTable("inquiries", {
   dateOfBirth: date("date_of_birth"),
   
   // Referral tracking
-  referralSource: varchar("referral_source", { length: 50 }),
+  referralOrigin: varchar("referral_origin", { length: 20 }), // "account" or "online"
+  referralAccountId: integer("referral_account_id"), // links to referralAccounts.id when origin is "account"
+  onlineSource: varchar("online_source", { length: 50 }), // specific online channel when origin is "online"
+  referralSource: varchar("referral_source", { length: 50 }), // legacy field for backward compatibility
   referralDetails: text("referral_details"),
   
   // Initial call info
@@ -257,23 +291,27 @@ export const levelOfCareDisplayNames: Record<LevelOfCare, string> = {
 // Referral account types
 export const accountTypes = [
   "hospital",
-  "physician",
-  "therapist",
-  "counselor",
-  "court",
-  "employer",
+  "private_practice",
+  "mat_clinic",
+  "outpatient_facility",
+  "residential_facility",
+  "attorneys",
+  "ed_consultant",
+  "community",
   "other",
 ] as const;
 
 export type AccountType = typeof accountTypes[number];
 
 export const accountTypeDisplayNames: Record<AccountType, string> = {
-  hospital: "Hospital/Medical",
-  physician: "Physician Office",
-  therapist: "Therapist/Counselor",
-  counselor: "Counselor/Social Worker",
-  court: "Court/Legal",
-  employer: "Employer/EAP",
+  hospital: "Hospital",
+  private_practice: "Private Practice",
+  mat_clinic: "MAT Clinic",
+  outpatient_facility: "Outpatient Facility",
+  residential_facility: "Residential Facility",
+  attorneys: "Attorneys",
+  ed_consultant: "Ed Consultant",
+  community: "Community",
   other: "Other",
 };
 
