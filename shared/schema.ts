@@ -48,6 +48,7 @@ export const pipelineStages = [
   "scheduled",
   "admitted",
   "non_viable",
+  "lost",
 ] as const;
 
 export type PipelineStage = typeof pipelineStages[number];
@@ -63,6 +64,27 @@ export const nonViableReasons = [
 ] as const;
 
 export type NonViableReason = typeof nonViableReasons[number];
+
+// Lost reasons - for viable clients who don't proceed to admission
+export const lostReasons = [
+  "went_elsewhere",
+  "ceased_contact",
+  "changed_mind",
+  "financial_reasons",
+  "family_decision",
+  "other",
+] as const;
+
+export type LostReason = typeof lostReasons[number];
+
+export const lostReasonDisplayNames: Record<LostReason, string> = {
+  went_elsewhere: "Went to Another Treatment Center",
+  ceased_contact: "Ceased Contact",
+  changed_mind: "Changed Mind",
+  financial_reasons: "Financial Reasons",
+  family_decision: "Family Decision",
+  other: "Other",
+};
 
 // Referral sources
 export const referralSources = [
@@ -117,6 +139,10 @@ export const inquiries = pgTable("inquiries", {
   isViable: varchar("is_viable", { length: 10 }),
   nonViableReason: varchar("non_viable_reason", { length: 50 }),
   nonViableNotes: text("non_viable_notes"),
+  
+  // Lost client tracking (for viable clients who don't proceed)
+  lostReason: varchar("lost_reason", { length: 50 }),
+  lostNotes: text("lost_notes"),
   
   // Insurance Information
   insuranceProvider: varchar("insurance_provider", { length: 255 }),
@@ -193,6 +219,7 @@ export const stageDisplayNames: Record<PipelineStage, string> = {
   scheduled: "Scheduled",
   admitted: "Admitted",
   non_viable: "Non-Viable",
+  lost: "Lost Client",
 };
 
 // Referral source display names

@@ -53,13 +53,15 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare } from "@shared/schema";
+import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason } from "@shared/schema";
 import {
   stageDisplayNames,
   nonViableReasons,
   nonViableReasonDisplayNames,
   levelsOfCare,
   levelOfCareDisplayNames,
+  lostReasons,
+  lostReasonDisplayNames,
 } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -72,6 +74,7 @@ const stageIcons: Record<PipelineStage, typeof Phone> = {
   scheduled: Calendar,
   admitted: UserCheck,
   non_viable: XCircle,
+  lost: XCircle,
 };
 
 const stageColors: Record<PipelineStage, string> = {
@@ -83,6 +86,7 @@ const stageColors: Record<PipelineStage, string> = {
   scheduled: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
   admitted: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
   non_viable: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
+  lost: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
 };
 
 export default function InquiryDetail() {
@@ -90,6 +94,7 @@ export default function InquiryDetail() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [showNonViableDialog, setShowNonViableDialog] = useState(false);
+  const [showLostDialog, setShowLostDialog] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
@@ -126,6 +131,15 @@ export default function InquiryDetail() {
       stage: "non_viable",
     });
     setShowNonViableDialog(false);
+  };
+
+  const handleLost = (reason: LostReason, notes: string) => {
+    updateMutation.mutate({
+      lostReason: reason,
+      lostNotes: notes,
+      stage: "lost",
+    });
+    setShowLostDialog(false);
   };
 
   const stage = inquiry?.stage as PipelineStage | undefined;
@@ -436,12 +450,44 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
             )}
           </Card>
         )}
+
+        {stage === "lost" && (
+          <Card className="border-amber-200 dark:border-amber-800">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <XCircle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl text-amber-700 dark:text-amber-300">Lost Client</CardTitle>
+                  <CardDescription>
+                    {inquiry.lostReason && (
+                      <>Reason: {lostReasonDisplayNames[inquiry.lostReason as LostReason]}</>
+                    )}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            {inquiry.lostNotes && (
+              <CardContent>
+                <p className="text-muted-foreground">{inquiry.lostNotes}</p>
+              </CardContent>
+            )}
+          </Card>
+        )}
       </main>
 
       <NonViableDialog
         open={showNonViableDialog}
         onClose={() => setShowNonViableDialog(false)}
         onConfirm={handleNonViable}
+        isPending={updateMutation.isPending}
+      />
+
+      <LostClientDialog
+        open={showLostDialog}
+        onClose={() => setShowLostDialog(false)}
+        onConfirm={handleLost}
         isPending={updateMutation.isPending}
       />
     </div>
@@ -511,6 +557,75 @@ function NonViableDialog({
           >
             {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Confirm Non-Viable
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LostClientDialog({
+  open,
+  onClose,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (reason: LostReason, notes: string) => void;
+  isPending: boolean;
+}) {
+  const [reason, setReason] = useState<LostReason | "">("");
+  const [notes, setNotes] = useState("");
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mark as Lost Client</DialogTitle>
+          <DialogDescription>
+            This client was viable but did not proceed to admission. Please select a reason.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Reason *</label>
+            <Select value={reason} onValueChange={(v) => setReason(v as LostReason)}>
+              <SelectTrigger className="h-12" data-testid="select-lost-reason">
+                <SelectValue placeholder="Select reason" />
+              </SelectTrigger>
+              <SelectContent>
+                {lostReasons.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {lostReasonDisplayNames[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Notes</label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Additional details..."
+              className="min-h-24"
+              data-testid="input-lost-notes"
+            />
+          </div>
+        </div>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
+            Cancel
+          </Button>
+          <Button
+            onClick={() => reason && onConfirm(reason, notes)}
+            disabled={!reason || isPending}
+            className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white"
+            data-testid="button-confirm-lost"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Confirm Lost Client
           </Button>
         </DialogFooter>
       </DialogContent>

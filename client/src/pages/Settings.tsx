@@ -15,9 +15,11 @@ import { stageDisplayNames, type PipelineStage, type NotificationSetting } from 
 import { useState, useEffect } from "react";
 
 const notifiableStages: PipelineStage[] = [
+  "vob_pending",
   "scheduled",
   "admitted",
   "non_viable",
+  "lost",
 ];
 
 export default function Settings() {
