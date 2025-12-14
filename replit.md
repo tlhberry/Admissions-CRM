@@ -41,6 +41,7 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 6. **Scheduled** - Admission scheduled (triggers email notification)
 7. **Admitted** - Client has been admitted
 8. **Non-Viable** - Client cannot proceed (with reason tracking)
+9. **Lost Client** - Viable client who did not proceed (with reason tracking)
 
 ## Features
 
@@ -57,11 +58,13 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 - **Analytics Dashboard** (`/analytics`): Conversion rates by referral source, non-viable reasons breakdown, stage distribution charts, BD rep performance tracking
 - **Advanced Search** (`/search`): Filter by date range, referral source, insurance provider, and stage
 - **CallTrackingMetrics Integration**: Webhook endpoint at `/api/webhooks/ctm` for automatic inquiry creation
-- **Email Notifications**: Automatic notifications when admissions are scheduled (requires SendGrid setup)
+- **Email Notifications**: Automatic notifications when admissions are scheduled or VOB is pending (requires SendGrid setup)
 - **Follow-up Reminders**: Dashboard alerts for inquiries pending in VOB/quote stages for 24+ hours
 - **Settings Page** (`/settings`): Configure notification emails per pipeline stage
 - **Referral Accounts** (`/accounts`): Manage referral source accounts with BD rep assignment, contacts, and activity logging
 - **BD Rep Activity Tracking**: Log face-to-face visits, phone calls, meetings with referral accounts
+- **Lost Client Tracking**: Track why viable clients don't proceed to admission with reason categories (went elsewhere, ceased contact, changed mind, financial reasons, family decision, other)
+- **Reports Dashboard** (`/reports`): Admissions metrics by time period (week/month/3 months/year), referral source performance, BD rep leaderboard, face-to-face activity summary, and overall conversion rates
 
 ## API Endpoints
 
