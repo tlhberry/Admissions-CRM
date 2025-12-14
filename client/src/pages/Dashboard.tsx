@@ -455,28 +455,61 @@ export default function Dashboard() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {getInquiriesByStage("admitted").slice(0, 3).map((inquiry) => (
-                    <button
-                      key={inquiry.id}
-                      onClick={() => navigate(`/inquiry/${inquiry.id}`)}
-                      className="w-full text-left p-3 rounded-lg border bg-card hover-elevate active-elevate-2 transition-colors"
-                      data-testid={`inquiry-card-${inquiry.id}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">
-                            {inquiry.clientName || inquiry.callerName || "Unknown"}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {inquiry.actualAdmitDate 
-                              ? format(new Date(inquiry.actualAdmitDate), "MMM d, yyyy")
-                              : "Admitted"}
-                          </p>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                      </div>
-                    </button>
-                  ))}
+                  {getInquiriesByStage("admitted")
+                    .sort((a, b) => {
+                      // Sort: clients without email sent first, email sent clients at bottom
+                      const aEmailSent = !!a.arrivalEmailSentAt;
+                      const bEmailSent = !!b.arrivalEmailSentAt;
+                      if (aEmailSent !== bEmailSent) {
+                        return aEmailSent ? 1 : -1;
+                      }
+                      // Within each group, sort by admit date (newest first)
+                      const aDate = a.actualAdmitDate ? new Date(a.actualAdmitDate).getTime() : 0;
+                      const bDate = b.actualAdmitDate ? new Date(b.actualAdmitDate).getTime() : 0;
+                      return bDate - aDate;
+                    })
+                    .slice(0, 5)
+                    .map((inquiry) => {
+                      const emailSent = !!inquiry.arrivalEmailSentAt;
+                      return (
+                        <button
+                          key={inquiry.id}
+                          onClick={() => navigate(`/inquiry/${inquiry.id}`)}
+                          className={`w-full text-left p-3 rounded-lg border hover-elevate active-elevate-2 transition-colors ${
+                            emailSent 
+                              ? "bg-muted/50 opacity-60" 
+                              : "bg-card"
+                          }`}
+                          data-testid={`inquiry-card-${inquiry.id}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                    emailSent 
+                                      ? "bg-green-300 dark:bg-green-700" 
+                                      : "bg-green-500"
+                                  }`}
+                                  title={emailSent ? "Arrival email sent" : "Waiting to send arrival email"}
+                                  data-testid={`email-dot-${inquiry.id}`}
+                                />
+                                <p className={`font-medium truncate ${emailSent ? "text-muted-foreground" : ""}`}>
+                                  {inquiry.clientName || inquiry.callerName || "Unknown"}
+                                </p>
+                              </div>
+                              <p className="text-sm text-muted-foreground pl-4">
+                                {inquiry.actualAdmitDate 
+                                  ? format(new Date(inquiry.actualAdmitDate), "MMM d, yyyy")
+                                  : "Admitted"}
+                                {emailSent && " - Email sent"}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                          </div>
+                        </button>
+                      );
+                    })}
                 </div>
               )}
             </CardContent>

@@ -156,6 +156,8 @@ export default function InquiryDetail() {
       return res.json();
     },
     onSuccess: (data: { message?: string }) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/inquiries/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inquiries"] });
       toast({ title: "Email Sent", description: data.message || "Client arrival email sent successfully" });
     },
     onError: (error: Error) => {

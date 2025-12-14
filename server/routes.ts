@@ -379,6 +379,24 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       const nursingForm = await storage.getNursingAssessmentForm(id);
       const preScreeningForm = await storage.getPreScreeningForm(id);
       
+      // Validate all 3 pre-assessment forms are complete
+      const incompleteForms: string[] = [];
+      if (!preCertForm || preCertForm.isComplete !== "yes") {
+        incompleteForms.push("Pre-Cert / Clinical Pre-Assessment");
+      }
+      if (!nursingForm || nursingForm.isComplete !== "yes") {
+        incompleteForms.push("Nursing Admission Assessment");
+      }
+      if (!preScreeningForm || preScreeningForm.isComplete !== "yes") {
+        incompleteForms.push("Pre-Screening Form");
+      }
+      
+      if (incompleteForms.length > 0) {
+        return res.status(400).json({
+          message: `Please complete all pre-assessment forms before sending the arrival email. Incomplete: ${incompleteForms.join(", ")}`
+        });
+      }
+      
       // Helper to extract only form content (remove DB metadata)
       const extractFormContent = (form: any) => {
         if (!form) return undefined;
@@ -410,10 +428,20 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         preScreening: extractFormContent(preScreeningForm),
       }, staffEmails);
       
+      // Email service not configured - return error so UI can surface this
+      if (!sent) {
+        return res.status(503).json({ 
+          message: "Email service not configured. Please set up SendGrid API key in secrets." 
+        });
+      }
+      
+      // Mark arrival email as sent only on successful delivery
+      await storage.updateInquiry(id, { arrivalEmailSentAt: new Date() });
+      
       res.json({ 
-        success: sent, 
+        success: true, 
         recipientCount: staffEmails.length,
-        message: sent ? `Arrival notification sent to ${staffEmails.length} recipient(s)` : "Email service not configured"
+        message: `Arrival notification sent to ${staffEmails.length} recipient(s)`
       });
     } catch (error) {
       console.error("Error sending arrival notification:", error);
