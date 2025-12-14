@@ -99,6 +99,8 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - `GET /api/activities` - List activities by current user
 - `GET /api/notification-settings` - Get notification settings
 - `POST /api/notification-settings` - Save notification setting
+- `POST /api/inquiries/:id/notify-staff` - Send admission scheduled notification to staff
+- `POST /api/inquiries/:id/send-arrival-email` - Send client arrival email with pre-assessment forms attached
 
 ### Public Endpoints
 - `POST /api/webhooks/ctm` - CallTrackingMetrics webhook (optionally secured with CTM_WEBHOOK_SECRET)
