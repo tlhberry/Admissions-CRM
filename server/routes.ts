@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, type InquiryFilters } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -14,6 +14,7 @@ import {
   insertPreCertFormSchema,
   insertNursingAssessmentFormSchema,
   insertPreScreeningFormSchema,
+  type User,
 } from "@shared/schema";
 import { z } from "zod";
 import { emailService } from "./emailService";
@@ -21,6 +22,28 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import OpenAI from "openai";
+
+// Helper to get user with companyId from request
+async function getUserWithCompany(req: any): Promise<User | null> {
+  const userId = req.user?.claims?.sub;
+  if (!userId) return null;
+  const user = await storage.getUser(userId);
+  return user || null;
+}
+
+// Helper to require companyId - returns 403 if user has no company
+async function requireCompanyId(req: any, res: Response): Promise<number | null> {
+  const user = await getUserWithCompany(req);
+  if (!user) {
+    res.status(401).json({ message: "User not found" });
+    return null;
+  }
+  if (!user.companyId) {
+    res.status(403).json({ message: "User is not associated with a company" });
+    return null;
+  }
+  return user.companyId;
+}
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -156,7 +179,10 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   // Inquiry routes
   app.get("/api/inquiries", isAuthenticated, async (req: any, res) => {
     try {
-      const inquiries = await storage.getAllInquiries();
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const inquiries = await storage.getAllInquiries(companyId);
       res.json(inquiries);
     } catch (error) {
       console.error("Error fetching inquiries:", error);
@@ -167,6 +193,9 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   // Search/filter inquiries
   app.get("/api/inquiries/search", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const filters: InquiryFilters = {
         search: req.query.search as string | undefined,
         stage: req.query.stage as string | undefined,
@@ -176,7 +205,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         endDate: req.query.endDate as string | undefined,
       };
 
-      const inquiries = await storage.searchInquiries(filters);
+      const inquiries = await storage.searchInquiries(companyId, filters);
       res.json(inquiries);
     } catch (error) {
       console.error("Error searching inquiries:", error);
@@ -186,12 +215,15 @@ Return a JSON object with these fields (use null if not found, use dollar amount
 
   app.get("/api/inquiries/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid inquiry ID" });
       }
 
-      const inquiry = await storage.getInquiry(id);
+      const inquiry = await storage.getInquiry(id, companyId);
       if (!inquiry) {
         return res.status(404).json({ message: "Inquiry not found" });
       }
@@ -205,10 +237,14 @@ Return a JSON object with these fields (use null if not found, use dollar amount
 
   app.post("/api/inquiries", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const userId = req.user.claims.sub;
       const validatedData = insertInquirySchema.parse({
         ...req.body,
         userId,
+        companyId,
       });
 
       const inquiry = await storage.createInquiry(validatedData);
@@ -227,13 +263,16 @@ Return a JSON object with these fields (use null if not found, use dollar amount
 
   app.patch("/api/inquiries/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid inquiry ID" });
       }
 
       // Get the current inquiry to check for stage change
-      const currentInquiry = await storage.getInquiry(id);
+      const currentInquiry = await storage.getInquiry(id, companyId);
       
       // Convert date strings to Date objects
       const body = { ...req.body };
@@ -245,7 +284,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       }
       
       const validatedData = updateInquirySchema.parse(body);
-      const inquiry = await storage.updateInquiry(id, validatedData);
+      const inquiry = await storage.updateInquiry(id, companyId, validatedData);
 
       if (!inquiry) {
         return res.status(404).json({ message: "Inquiry not found" });
@@ -266,12 +305,15 @@ Return a JSON object with these fields (use null if not found, use dollar amount
 
   app.delete("/api/inquiries/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid inquiry ID" });
       }
 
-      await storage.deleteInquiry(id);
+      await storage.deleteInquiry(id, companyId);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting inquiry:", error);
@@ -282,14 +324,17 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   // Manual staff notification endpoint - sends email to all staff about new admission
   app.post("/api/inquiries/:id/notify-staff", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
       
-      const inquiry = await storage.getInquiry(id);
+      const inquiry = await storage.getInquiry(id, companyId);
       if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
       
       // Get notification settings for scheduled stage
-      const notificationSettings = await storage.getNotificationSettings();
+      const notificationSettings = await storage.getNotificationSettings(companyId);
       const scheduledSetting = notificationSettings.find(s => s.stageName === "scheduled");
       
       let staffEmails: string[] = [];
@@ -345,14 +390,17 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   // Send client arrival email with pre-assessment forms attached
   app.post("/api/inquiries/:id/send-arrival-email", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
       
-      const inquiry = await storage.getInquiry(id);
+      const inquiry = await storage.getInquiry(id, companyId);
       if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
       
       // Get notification settings for admitted stage
-      const notificationSettings = await storage.getNotificationSettings();
+      const notificationSettings = await storage.getNotificationSettings(companyId);
       const admittedSetting = notificationSettings.find(s => s.stageName === "admitted");
       
       let staffEmails: string[] = [];
@@ -436,7 +484,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       }
       
       // Mark arrival email as sent only on successful delivery
-      await storage.updateInquiry(id, { arrivalEmailSentAt: new Date() });
+      await storage.updateInquiry(id, companyId, { arrivalEmailSentAt: new Date() });
       
       res.json({ 
         success: true, 
@@ -449,18 +497,13 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
-  // CallTrackingMetrics Webhook Endpoint
-  // This endpoint receives incoming call data from CallTrackingMetrics
+  // DEPRECATED: Global CTM Webhook Endpoint
+  // This endpoint is deprecated. Use the company-specific endpoint instead:
+  // POST /api/webhooks/ctm/:webhookToken
   // 
-  // WEBHOOK URL FORMAT:
-  // https://your-app.replit.app/api/webhooks/ctm
+  // The company-specific webhook URL can be found in Admin Settings > CTM Integration
   // 
-  // If using a secret for security, add it as a query parameter or header:
-  // URL: https://your-app.replit.app/api/webhooks/ctm?secret=YOUR_SECRET
-  // Header: x-ctm-secret: YOUR_SECRET
-  //
-  // CTM FIELD MAPPING:
-  // CTM sends these fields which we capture:
+  // CTM FIELD MAPPING (same for both endpoints):
   // - caller_name / caller_id -> callerName
   // - caller_number / ani -> phoneNumber
   // - tracking_source / source -> referralSource (mapped to our categories)
@@ -470,85 +513,20 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   // - recording_url / recording -> callRecordingUrl
   //
   app.post("/api/webhooks/ctm", async (req, res) => {
-    try {
-      // Validate webhook secret if configured
-      const webhookSecret = process.env.CTM_WEBHOOK_SECRET;
-      if (webhookSecret) {
-        const providedSecret = req.headers["x-ctm-secret"] || req.query.secret;
-        if (providedSecret !== webhookSecret) {
-          console.log("CTM webhook: Invalid secret provided");
-          return res.status(401).json({ message: "Unauthorized" });
-        }
-      }
-
-      const callData = req.body;
-      console.log("CTM webhook received:", JSON.stringify(callData, null, 2));
-
-      // Map CTM call data to inquiry fields
-      const callerName = callData.caller_name || callData.caller_id || callData.cnam || "Incoming Call";
-      const phoneNumber = callData.caller_number || callData.caller_id || callData.ani || callData.from || "";
-      const referralSource = mapCTMSourceToReferral(callData.tracking_source || callData.source || callData.campaign);
-      const referralDetails = callData.tracking_source || callData.source || callData.campaign || "";
-      
-      // CTM-specific fields
-      const ctmCallId = callData.call_id || callData.id || null;
-      const ctmTrackingNumber = callData.tracking_number || callData.called_number || callData.to || null;
-      const callDuration = callData.duration || callData.talk_time || callData.call_length || null;
-      const callRecordingUrl = callData.recording_url || callData.recording || callData.audio_url || null;
-      const ctmSource = callData.tracking_source || callData.source || callData.campaign || null;
-      
-      // Auto-detect Google PPC from tracking source
-      const sourceString = (ctmSource || "").toLowerCase();
-      const isPaidCampaign = sourceString.includes("ppc") || 
-                              sourceString.includes("paid") || 
-                              sourceString.includes("ads") || 
-                              sourceString.includes("cpc") ||
-                              sourceString.includes("google_ads") ||
-                              sourceString.includes("adwords");
-      
-      const initialNotes = [
-        "Auto-created from CallTrackingMetrics webhook.",
-        ctmCallId ? `Call ID: ${ctmCallId}` : null,
-        ctmTrackingNumber ? `Tracking Number: ${ctmTrackingNumber}` : null,
-        callDuration ? `Call Duration: ${callDuration} seconds` : null,
-        callData.call_time || callData.start_time ? `Call Time: ${callData.call_time || callData.start_time}` : null,
-        callData.city || callData.state ? `Location: ${[callData.city, callData.state].filter(Boolean).join(", ")}` : null,
-      ].filter(Boolean).join("\n");
-
-      const inquiry = await storage.createInquiry({
-        callerName,
-        phoneNumber,
-        referralSource,
-        referralDetails,
-        initialNotes,
-        stage: "inquiry",
-        ctmCallId: ctmCallId?.toString() || null,
-        ctmTrackingNumber,
-        callDurationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
-        callRecordingUrl,
-        ctmSource,
-        // Auto-set referral origin for paid campaigns
-        referralOrigin: isPaidCampaign ? "online" : null,
-        onlineSource: isPaidCampaign ? "google_ppc" : null,
-      });
-
-      console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber}`);
-      res.status(201).json({ 
-        success: true, 
-        inquiryId: inquiry.id,
-        message: "Inquiry created from CTM webhook",
-        caller: phoneNumber,
-      });
-    } catch (error) {
-      console.error("CTM webhook error:", error);
-      res.status(500).json({ message: "Failed to process CTM webhook" });
-    }
+    console.log("DEPRECATED: /api/webhooks/ctm endpoint called. Use /api/webhooks/ctm/:webhookToken instead.");
+    return res.status(410).json({ 
+      message: "This endpoint is deprecated. Please use the company-specific webhook URL from Admin Settings > CTM Integration.",
+      newEndpointFormat: "/api/webhooks/ctm/{webhookToken}"
+    });
   });
 
   // Test endpoint to simulate CTM webhook (for testing purposes)
   // This allows you to test the webhook integration without waiting for real calls
-  app.post("/api/webhooks/ctm/test", isAuthenticated, async (req, res) => {
+  app.post("/api/webhooks/ctm/test", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       // Generate sample CTM-like data
       const sampleData = {
         call_id: `test-${Date.now()}`,
@@ -599,12 +577,13 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         callDurationSeconds: parseInt(sampleData.duration, 10),
         callRecordingUrl: sampleData.recording_url,
         ctmSource: sampleData.tracking_source,
+        companyId,
         // Auto-set referral origin for paid campaigns
         referralOrigin: isPaidCampaign ? "online" : null,
         onlineSource: isPaidCampaign ? "google_ppc" : null,
       });
 
-      console.log(`CTM test webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber}`);
+      console.log(`CTM test webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber} (company ${companyId})`);
       res.status(201).json({ 
         success: true, 
         inquiryId: inquiry.id,
@@ -617,14 +596,105 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
+  // Company-specific CTM webhook endpoint
+  // Each company has a unique webhook token for CTM integration
+  // URL Format: https://your-app.replit.app/api/webhooks/ctm/{webhookToken}
+  app.post("/api/webhooks/ctm/:webhookToken", async (req, res) => {
+    try {
+      const { webhookToken } = req.params;
+      
+      // Look up company by webhook token
+      const company = await storage.getCompanyByWebhookToken(webhookToken);
+      if (!company) {
+        console.log(`CTM webhook: Invalid webhook token: ${webhookToken}`);
+        return res.status(404).json({ message: "Invalid webhook URL" });
+      }
+      
+      // Validate optional webhook secret if configured
+      if (company.ctmWebhookSecret) {
+        const providedSecret = req.headers["x-ctm-secret"] || req.query.secret;
+        if (providedSecret !== company.ctmWebhookSecret) {
+          console.log(`CTM webhook: Invalid secret for company ${company.id}`);
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+      }
+
+      const callData = req.body;
+      console.log(`CTM webhook received for ${company.name}:`, JSON.stringify(callData, null, 2));
+
+      // Map CTM call data to inquiry fields
+      const callerName = callData.caller_name || callData.caller_id || callData.cnam || "Incoming Call";
+      const phoneNumber = callData.caller_number || callData.caller_id || callData.ani || callData.from || "";
+      const referralSource = mapCTMSourceToReferral(callData.tracking_source || callData.source || callData.campaign);
+      const referralDetails = callData.tracking_source || callData.source || callData.campaign || "";
+      
+      // CTM-specific fields
+      const ctmCallId = callData.call_id || callData.id || null;
+      const ctmTrackingNumber = callData.tracking_number || callData.called_number || callData.to || null;
+      const callDuration = callData.duration || callData.talk_time || callData.call_length || null;
+      const callRecordingUrl = callData.recording_url || callData.recording || callData.audio_url || null;
+      const ctmSource = callData.tracking_source || callData.source || callData.campaign || null;
+      
+      // Auto-detect Google PPC from tracking source
+      const sourceString = (ctmSource || "").toLowerCase();
+      const isPaidCampaign = sourceString.includes("ppc") || 
+                              sourceString.includes("paid") || 
+                              sourceString.includes("ads") || 
+                              sourceString.includes("cpc") ||
+                              sourceString.includes("google_ads") ||
+                              sourceString.includes("adwords");
+      
+      const initialNotes = [
+        "Auto-created from CallTrackingMetrics webhook.",
+        ctmCallId ? `Call ID: ${ctmCallId}` : null,
+        ctmTrackingNumber ? `Tracking Number: ${ctmTrackingNumber}` : null,
+        callDuration ? `Call Duration: ${callDuration} seconds` : null,
+        callData.call_time || callData.start_time ? `Call Time: ${callData.call_time || callData.start_time}` : null,
+        callData.city || callData.state ? `Location: ${[callData.city, callData.state].filter(Boolean).join(", ")}` : null,
+      ].filter(Boolean).join("\n");
+
+      const inquiry = await storage.createInquiry({
+        callerName,
+        phoneNumber,
+        referralSource,
+        referralDetails,
+        initialNotes,
+        stage: "inquiry",
+        ctmCallId: ctmCallId?.toString() || null,
+        ctmTrackingNumber,
+        callDurationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
+        callRecordingUrl,
+        ctmSource,
+        companyId: company.id,
+        // Auto-set referral origin for paid campaigns
+        referralOrigin: isPaidCampaign ? "online" : null,
+        onlineSource: isPaidCampaign ? "google_ppc" : null,
+      });
+
+      console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber} (company: ${company.name})`);
+      res.status(201).json({ 
+        success: true, 
+        inquiryId: inquiry.id,
+        message: "Inquiry created from CTM webhook",
+        caller: phoneNumber,
+      });
+    } catch (error) {
+      console.error("CTM webhook error:", error);
+      res.status(500).json({ message: "Failed to process CTM webhook" });
+    }
+  });
+
   // AI Call Transcription Endpoint
   // Transcribes call recording and auto-fills inquiry fields
   app.post("/api/inquiries/:id/transcribe", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
 
-      const inquiry = await storage.getInquiry(id);
+      const inquiry = await storage.getInquiry(id, companyId);
       if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
 
       if (!inquiry.callRecordingUrl) {
@@ -723,7 +793,7 @@ ${transcription}`;
         updateData.initialNotes = existingNotes + separator + extractedData.presentingIssues;
       }
 
-      const updatedInquiry = await storage.updateInquiry(id, updateData);
+      const updatedInquiry = await storage.updateInquiry(id, companyId, updateData);
 
       res.json({
         success: true,
@@ -738,11 +808,14 @@ ${transcription}`;
     }
   });
 
-  // Users route (for BD rep dropdown)
-  app.get("/api/users", isAuthenticated, async (req, res) => {
+  // Users route (for BD rep dropdown - returns users in same company)
+  app.get("/api/users", isAuthenticated, async (req: any, res) => {
     try {
-      const allUsers = await storage.getAllUsers();
-      res.json(allUsers);
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const companyUsers = await storage.getUsersByCompany(companyId);
+      res.json(companyUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
@@ -750,9 +823,12 @@ ${transcription}`;
   });
 
   // Referral Account routes
-  app.get("/api/referral-accounts", isAuthenticated, async (req, res) => {
+  app.get("/api/referral-accounts", isAuthenticated, async (req: any, res) => {
     try {
-      const accounts = await storage.getAllReferralAccounts();
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const accounts = await storage.getAllReferralAccounts(companyId);
       res.json(accounts);
     } catch (error) {
       console.error("Error fetching referral accounts:", error);
@@ -762,10 +838,14 @@ ${transcription}`;
 
   app.post("/api/referral-accounts", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const userId = req.user.claims.sub;
       const validatedData = insertReferralAccountSchema.parse({
         ...req.body,
         createdBy: userId,
+        companyId,
       });
       const account = await storage.createReferralAccount(validatedData);
       res.status(201).json(account);
@@ -778,11 +858,14 @@ ${transcription}`;
     }
   });
 
-  app.get("/api/referral-accounts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/referral-accounts/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid account ID" });
-      const account = await storage.getReferralAccount(id);
+      const account = await storage.getReferralAccount(id, companyId);
       if (!account) return res.status(404).json({ message: "Account not found" });
       res.json(account);
     } catch (error) {
@@ -791,11 +874,14 @@ ${transcription}`;
     }
   });
 
-  app.patch("/api/referral-accounts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/referral-accounts/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid account ID" });
-      const account = await storage.updateReferralAccount(id, req.body);
+      const account = await storage.updateReferralAccount(id, companyId, req.body);
       if (!account) return res.status(404).json({ message: "Account not found" });
       res.json(account);
     } catch (error) {
@@ -804,11 +890,14 @@ ${transcription}`;
     }
   });
 
-  app.delete("/api/referral-accounts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/referral-accounts/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid account ID" });
-      await storage.deleteReferralAccount(id);
+      await storage.deleteReferralAccount(id, companyId);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting referral account:", error);
@@ -874,11 +963,14 @@ ${transcription}`;
   });
 
   // Activity Log routes
-  app.get("/api/referral-accounts/:id/activities", isAuthenticated, async (req, res) => {
+  app.get("/api/referral-accounts/:id/activities", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const accountId = parseInt(req.params.id);
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
-      const activities = await storage.getActivityLogsByAccount(accountId);
+      const activities = await storage.getActivityLogsByAccount(accountId, companyId);
       res.json(activities);
     } catch (error) {
       console.error("Error fetching activities:", error);
@@ -888,6 +980,9 @@ ${transcription}`;
 
   app.post("/api/referral-accounts/:id/activities", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const accountId = parseInt(req.params.id);
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
       const userId = req.user.claims.sub;
@@ -895,6 +990,7 @@ ${transcription}`;
         ...req.body,
         accountId,
         userId,
+        companyId,
         activityDate: new Date(req.body.activityDate),
       });
       const activity = await storage.createActivityLog(validatedData);
@@ -910,8 +1006,11 @@ ${transcription}`;
 
   app.get("/api/activities", isAuthenticated, async (req: any, res) => {
     try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const userId = req.user.claims.sub;
-      const activities = await storage.getActivityLogsByUser(userId);
+      const activities = await storage.getActivityLogsByUser(userId, companyId);
       res.json(activities);
     } catch (error) {
       console.error("Error fetching user activities:", error);
@@ -920,9 +1019,12 @@ ${transcription}`;
   });
 
   // Notification Settings routes
-  app.get("/api/notification-settings", isAuthenticated, async (req, res) => {
+  app.get("/api/notification-settings", isAuthenticated, async (req: any, res) => {
     try {
-      const settings = await storage.getNotificationSettings();
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const settings = await storage.getNotificationSettings(companyId);
       res.json(settings);
     } catch (error) {
       console.error("Error fetching notification settings:", error);
@@ -930,9 +1032,15 @@ ${transcription}`;
     }
   });
 
-  app.post("/api/notification-settings", isAuthenticated, async (req, res) => {
+  app.post("/api/notification-settings", isAuthenticated, async (req: any, res) => {
     try {
-      const validatedData = insertNotificationSettingSchema.parse(req.body);
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const validatedData = insertNotificationSettingSchema.parse({
+        ...req.body,
+        companyId,
+      });
       const setting = await storage.upsertNotificationSetting(validatedData);
       res.status(201).json(setting);
     } catch (error) {

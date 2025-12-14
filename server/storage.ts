@@ -8,6 +8,7 @@ import {
   preCertForms,
   nursingAssessmentForms,
   preScreeningForms,
+  companies,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -27,6 +28,8 @@ import {
   type InsertNursingAssessmentForm,
   type PreScreeningForm,
   type InsertPreScreeningForm,
+  type Company,
+  type InsertCompany,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL } from "drizzle-orm";
@@ -41,27 +44,34 @@ export interface InquiryFilters {
 }
 
 export interface IStorage {
+  // Company operations
+  getCompany(id: number): Promise<Company | undefined>;
+  getCompanyByWebhookToken(token: string): Promise<Company | undefined>;
+  createCompany(data: InsertCompany): Promise<Company>;
+  updateCompany(id: number, data: Partial<InsertCompany>): Promise<Company | undefined>;
+  
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  getAllUsers(): Promise<User[]>;
+  getUsersByCompany(companyId: number): Promise<User[]>;
+  updateUser(id: string, data: Partial<UpsertUser>): Promise<User | undefined>;
   
-  // Inquiry operations
-  getInquiry(id: number): Promise<Inquiry | undefined>;
-  getInquiriesByUser(userId: string): Promise<Inquiry[]>;
-  getAllInquiries(): Promise<Inquiry[]>;
-  searchInquiries(filters: InquiryFilters): Promise<Inquiry[]>;
+  // Inquiry operations (all require companyId for tenant isolation)
+  getInquiry(id: number, companyId: number): Promise<Inquiry | undefined>;
+  getInquiriesByUser(userId: string, companyId: number): Promise<Inquiry[]>;
+  getAllInquiries(companyId: number): Promise<Inquiry[]>;
+  searchInquiries(companyId: number, filters: InquiryFilters): Promise<Inquiry[]>;
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
-  updateInquiry(id: number, data: UpdateInquiry): Promise<Inquiry | undefined>;
-  deleteInquiry(id: number): Promise<void>;
+  updateInquiry(id: number, companyId: number, data: UpdateInquiry): Promise<Inquiry | undefined>;
+  deleteInquiry(id: number, companyId: number): Promise<void>;
   
   // Referral Account operations
-  getReferralAccount(id: number): Promise<ReferralAccount | undefined>;
-  getAllReferralAccounts(): Promise<ReferralAccount[]>;
-  getReferralAccountsByRep(userId: string): Promise<ReferralAccount[]>;
+  getReferralAccount(id: number, companyId: number): Promise<ReferralAccount | undefined>;
+  getAllReferralAccounts(companyId: number): Promise<ReferralAccount[]>;
+  getReferralAccountsByRep(userId: string, companyId: number): Promise<ReferralAccount[]>;
   createReferralAccount(data: InsertReferralAccount): Promise<ReferralAccount>;
-  updateReferralAccount(id: number, data: Partial<InsertReferralAccount>): Promise<ReferralAccount | undefined>;
-  deleteReferralAccount(id: number): Promise<void>;
+  updateReferralAccount(id: number, companyId: number, data: Partial<InsertReferralAccount>): Promise<ReferralAccount | undefined>;
+  deleteReferralAccount(id: number, companyId: number): Promise<void>;
   
   // Referral Contact operations
   getReferralContact(id: number): Promise<ReferralContact | undefined>;
@@ -73,12 +83,12 @@ export interface IStorage {
   // Activity Log operations
   getActivityLog(id: number): Promise<ActivityLog | undefined>;
   getActivityLogsByAccount(accountId: number): Promise<ActivityLog[]>;
-  getActivityLogsByUser(userId: string): Promise<ActivityLog[]>;
+  getActivityLogsByUser(userId: string, companyId: number): Promise<ActivityLog[]>;
   createActivityLog(data: InsertActivityLog): Promise<ActivityLog>;
   
   // Notification Settings operations
-  getNotificationSettings(): Promise<NotificationSetting[]>;
-  getNotificationSettingByStage(stageName: string): Promise<NotificationSetting | undefined>;
+  getNotificationSettings(companyId: number): Promise<NotificationSetting[]>;
+  getNotificationSettingByStage(companyId: number, stageName: string): Promise<NotificationSetting | undefined>;
   upsertNotificationSetting(data: InsertNotificationSetting): Promise<NotificationSetting>;
   
   // Pre-Assessment Form operations
@@ -92,6 +102,43 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Company operations
+  async getCompany(id: number): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    return company;
+  }
+
+  async getCompanyByWebhookToken(token: string): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies).where(eq(companies.ctmWebhookToken, token));
+    return company;
+  }
+
+  async createCompany(data: InsertCompany): Promise<Company> {
+    const webhookToken = this.generateWebhookToken();
+    const [company] = await db.insert(companies).values({
+      ...data,
+      ctmWebhookToken: webhookToken,
+    }).returning();
+    return company;
+  }
+
+  async updateCompany(id: number, data: Partial<InsertCompany>): Promise<Company | undefined> {
+    const [company] = await db.update(companies)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(companies.id, id))
+      .returning();
+    return company;
+  }
+
+  private generateWebhookToken(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    for (let i = 0; i < 32; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+  }
+
   // User operations (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -113,32 +160,47 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Inquiry operations
-  async getInquiry(id: number): Promise<Inquiry | undefined> {
+  async getUsersByCompany(companyId: number): Promise<User[]> {
+    return db.select().from(users)
+      .where(eq(users.companyId, companyId))
+      .orderBy(users.firstName);
+  }
+
+  async updateUser(id: string, data: Partial<UpsertUser>): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  // Inquiry operations with tenant isolation
+  async getInquiry(id: number, companyId: number): Promise<Inquiry | undefined> {
     const [inquiry] = await db
       .select()
       .from(inquiries)
-      .where(eq(inquiries.id, id));
+      .where(and(eq(inquiries.id, id), eq(inquiries.companyId, companyId)));
     return inquiry;
   }
 
-  async getInquiriesByUser(userId: string): Promise<Inquiry[]> {
+  async getInquiriesByUser(userId: string, companyId: number): Promise<Inquiry[]> {
     return db
       .select()
       .from(inquiries)
-      .where(eq(inquiries.userId, userId))
+      .where(and(eq(inquiries.userId, userId), eq(inquiries.companyId, companyId)))
       .orderBy(desc(inquiries.createdAt));
   }
 
-  async getAllInquiries(): Promise<Inquiry[]> {
+  async getAllInquiries(companyId: number): Promise<Inquiry[]> {
     return db
       .select()
       .from(inquiries)
+      .where(eq(inquiries.companyId, companyId))
       .orderBy(desc(inquiries.createdAt));
   }
 
-  async searchInquiries(filters: InquiryFilters): Promise<Inquiry[]> {
-    const conditions: SQL[] = [];
+  async searchInquiries(companyId: number, filters: InquiryFilters): Promise<Inquiry[]> {
+    const conditions: SQL[] = [eq(inquiries.companyId, companyId)];
 
     if (filters.search) {
       const searchTerm = `%${filters.search}%`;
@@ -175,10 +237,6 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(inquiries.callDateTime, endDate));
     }
 
-    if (conditions.length === 0) {
-      return this.getAllInquiries();
-    }
-
     return db
       .select()
       .from(inquiries)
@@ -197,39 +255,38 @@ export class DatabaseStorage implements IStorage {
     return inquiry;
   }
 
-  async updateInquiry(id: number, data: UpdateInquiry): Promise<Inquiry | undefined> {
+  async updateInquiry(id: number, companyId: number, data: UpdateInquiry): Promise<Inquiry | undefined> {
     const [inquiry] = await db
       .update(inquiries)
       .set({
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(inquiries.id, id))
+      .where(and(eq(inquiries.id, id), eq(inquiries.companyId, companyId)))
       .returning();
     return inquiry;
   }
 
-  async deleteInquiry(id: number): Promise<void> {
-    await db.delete(inquiries).where(eq(inquiries.id, id));
+  async deleteInquiry(id: number, companyId: number): Promise<void> {
+    await db.delete(inquiries).where(and(eq(inquiries.id, id), eq(inquiries.companyId, companyId)));
   }
 
-  async getAllUsers(): Promise<User[]> {
-    return db.select().from(users).orderBy(users.firstName);
-  }
-
-  // Referral Account operations
-  async getReferralAccount(id: number): Promise<ReferralAccount | undefined> {
-    const [account] = await db.select().from(referralAccounts).where(eq(referralAccounts.id, id));
+  // Referral Account operations with tenant isolation
+  async getReferralAccount(id: number, companyId: number): Promise<ReferralAccount | undefined> {
+    const [account] = await db.select().from(referralAccounts)
+      .where(and(eq(referralAccounts.id, id), eq(referralAccounts.companyId, companyId)));
     return account;
   }
 
-  async getAllReferralAccounts(): Promise<ReferralAccount[]> {
-    return db.select().from(referralAccounts).orderBy(desc(referralAccounts.createdAt));
+  async getAllReferralAccounts(companyId: number): Promise<ReferralAccount[]> {
+    return db.select().from(referralAccounts)
+      .where(eq(referralAccounts.companyId, companyId))
+      .orderBy(desc(referralAccounts.createdAt));
   }
 
-  async getReferralAccountsByRep(userId: string): Promise<ReferralAccount[]> {
+  async getReferralAccountsByRep(userId: string, companyId: number): Promise<ReferralAccount[]> {
     return db.select().from(referralAccounts)
-      .where(eq(referralAccounts.assignedBdRepId, userId))
+      .where(and(eq(referralAccounts.assignedBdRepId, userId), eq(referralAccounts.companyId, companyId)))
       .orderBy(desc(referralAccounts.createdAt));
   }
 
@@ -238,18 +295,20 @@ export class DatabaseStorage implements IStorage {
     return account;
   }
 
-  async updateReferralAccount(id: number, data: Partial<InsertReferralAccount>): Promise<ReferralAccount | undefined> {
+  async updateReferralAccount(id: number, companyId: number, data: Partial<InsertReferralAccount>): Promise<ReferralAccount | undefined> {
     const [account] = await db.update(referralAccounts)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(referralAccounts.id, id))
+      .where(and(eq(referralAccounts.id, id), eq(referralAccounts.companyId, companyId)))
       .returning();
     return account;
   }
 
-  async deleteReferralAccount(id: number): Promise<void> {
+  async deleteReferralAccount(id: number, companyId: number): Promise<void> {
+    const account = await this.getReferralAccount(id, companyId);
+    if (!account) return;
     await db.delete(referralContacts).where(eq(referralContacts.accountId, id));
     await db.delete(activityLogs).where(eq(activityLogs.accountId, id));
-    await db.delete(referralAccounts).where(eq(referralAccounts.id, id));
+    await db.delete(referralAccounts).where(and(eq(referralAccounts.id, id), eq(referralAccounts.companyId, companyId)));
   }
 
   // Referral Contact operations
@@ -288,9 +347,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(activityLogs.activityDate));
   }
 
-  async getActivityLogsByUser(userId: string): Promise<ActivityLog[]> {
+  async getActivityLogsByUser(userId: string, companyId: number): Promise<ActivityLog[]> {
     return db.select().from(activityLogs)
-      .where(eq(activityLogs.userId, userId))
+      .where(and(eq(activityLogs.userId, userId), eq(activityLogs.companyId, companyId)))
       .orderBy(desc(activityLogs.activityDate));
   }
 
@@ -300,24 +359,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Notification Settings operations
-  async getNotificationSettings(): Promise<NotificationSetting[]> {
-    return db.select().from(notificationSettings);
+  async getNotificationSettings(companyId: number): Promise<NotificationSetting[]> {
+    return db.select().from(notificationSettings)
+      .where(eq(notificationSettings.companyId, companyId));
   }
 
-  async getNotificationSettingByStage(stageName: string): Promise<NotificationSetting | undefined> {
+  async getNotificationSettingByStage(companyId: number, stageName: string): Promise<NotificationSetting | undefined> {
     const [setting] = await db.select().from(notificationSettings)
-      .where(eq(notificationSettings.stageName, stageName));
+      .where(and(eq(notificationSettings.companyId, companyId), eq(notificationSettings.stageName, stageName)));
     return setting;
   }
 
   async upsertNotificationSetting(data: InsertNotificationSetting): Promise<NotificationSetting> {
-    const [setting] = await db.insert(notificationSettings)
-      .values(data)
-      .onConflictDoUpdate({
-        target: notificationSettings.stageName,
-        set: { ...data, updatedAt: new Date() },
-      })
-      .returning();
+    const existing = await this.getNotificationSettingByStage(data.companyId, data.stageName);
+    if (existing) {
+      const [setting] = await db.update(notificationSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(notificationSettings.id, existing.id))
+        .returning();
+      return setting;
+    }
+    const [setting] = await db.insert(notificationSettings).values(data).returning();
     return setting;
   }
 

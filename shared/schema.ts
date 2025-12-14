@@ -36,6 +36,9 @@ export const companies = pgTable("companies", {
   billingAddress: text("billing_address"),
   billingPhone: varchar("billing_phone", { length: 50 }),
   billingNotes: text("billing_notes"),
+  ctmWebhookToken: varchar("ctm_webhook_token", { length: 64 }),
+  ctmWebhookSecret: varchar("ctm_webhook_secret", { length: 255 }),
+  ctmEnabled: varchar("ctm_enabled", { length: 10 }).default("no"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
