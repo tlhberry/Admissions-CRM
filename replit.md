@@ -61,7 +61,8 @@ A mobile-friendly admissions CRM designed for addiction treatment centers. Featu
 - **Email Notifications**: Automatic notifications when admissions are scheduled or VOB is pending (requires SendGrid setup)
 - **Follow-up Reminders**: Dashboard alerts for inquiries pending in VOB/quote stages for 24+ hours
 - **Settings Page** (`/settings`): Configure notification emails per pipeline stage
-- **Referral Accounts** (`/accounts`): Manage referral source accounts with BD rep assignment, contacts, and activity logging
+- **Referral Accounts** (`/accounts`): Manage referral source accounts with BD rep assignment, contacts, and activity logging. Account types include: Hospital, Private Practice, MAT Clinic, Outpatient Facility, Residential Facility, Attorneys, Ed Consultant, Community, Other
+- **Enhanced Referral Source Tracking**: Inquiries can be linked to either a specific referral account OR an online marketing source (Google PPC, Google Organic, Facebook, Instagram, Website Direct, Alumni Referral, Word of Mouth, Phone Book, Other)
 - **BD Rep Activity Tracking**: Log face-to-face visits, phone calls, meetings with referral accounts
 - **Lost Client Tracking**: Track why viable clients don't proceed to admission with reason categories (went elsewhere, ceased contact, changed mind, financial reasons, family decision, other)
 - **Reports Dashboard** (`/reports`): Admissions metrics by time period (week/month/3 months/year), referral source performance, BD rep leaderboard, face-to-face activity summary, and overall conversion rates
