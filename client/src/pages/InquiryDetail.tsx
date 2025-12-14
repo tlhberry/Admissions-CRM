@@ -100,6 +100,8 @@ export default function InquiryDetail() {
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
+  const [editingReferral, setEditingReferral] = useState(false);
+  const [referralSearch, setReferralSearch] = useState("");
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
@@ -356,7 +358,109 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Referral Source</p>
-                <p className="font-medium" data-testid="text-referral-source">{getReferralSourceDisplay()}</p>
+                {editingReferral ? (
+                  <div className="relative">
+                    <Input
+                      value={referralSearch}
+                      onChange={(e) => setReferralSearch(e.target.value)}
+                      placeholder="Search accounts or online sources..."
+                      className="h-10"
+                      autoFocus
+                      data-testid="input-referral-search"
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setEditingReferral(false);
+                          setReferralSearch("");
+                        }
+                      }}
+                    />
+                    {referralSearch && (
+                      <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto">
+                        {/* Referral Accounts Section */}
+                        {referralAccounts && referralAccounts
+                          .filter(a => a.name.toLowerCase().includes(referralSearch.toLowerCase()))
+                          .slice(0, 5)
+                          .map(account => (
+                            <button
+                              key={`account-${account.id}`}
+                              className="w-full px-3 py-2 text-left hover-elevate flex items-center gap-2"
+                              onClick={() => {
+                                updateMutation.mutate({
+                                  referralOrigin: "account",
+                                  referralAccountId: account.id,
+                                  onlineSource: null,
+                                });
+                                setEditingReferral(false);
+                                setReferralSearch("");
+                              }}
+                              data-testid={`option-account-${account.id}`}
+                            >
+                              <Badge variant="outline" className="text-xs">Account</Badge>
+                              <span>{account.name}</span>
+                            </button>
+                          ))}
+                        {/* Online Sources Section */}
+                        {Object.entries(onlineReferralSourceDisplayNames)
+                          .filter(([, name]) => name.toLowerCase().includes(referralSearch.toLowerCase()))
+                          .slice(0, 5)
+                          .map(([key, name]) => (
+                            <button
+                              key={`online-${key}`}
+                              className="w-full px-3 py-2 text-left hover-elevate flex items-center gap-2"
+                              onClick={() => {
+                                updateMutation.mutate({
+                                  referralOrigin: "online",
+                                  onlineSource: key,
+                                  referralAccountId: null,
+                                });
+                                setEditingReferral(false);
+                                setReferralSearch("");
+                              }}
+                              data-testid={`option-online-${key}`}
+                            >
+                              <Badge variant="secondary" className="text-xs">Online</Badge>
+                              <span>{name}</span>
+                            </button>
+                          ))}
+                        {/* No results */}
+                        {(!referralAccounts?.some(a => a.name.toLowerCase().includes(referralSearch.toLowerCase())) &&
+                          !Object.values(onlineReferralSourceDisplayNames).some(n => n.toLowerCase().includes(referralSearch.toLowerCase()))) && (
+                          <div className="px-3 py-2 text-muted-foreground text-sm">No matching sources found</div>
+                        )}
+                      </div>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute right-1 top-1"
+                      onClick={() => {
+                        setEditingReferral(false);
+                        setReferralSearch("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p 
+                      className="font-medium cursor-pointer hover-elevate rounded px-1 -mx-1"
+                      onClick={() => setEditingReferral(true)}
+                      data-testid="text-referral-source"
+                    >
+                      {getReferralSourceDisplay()}
+                    </p>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setEditingReferral(true)}
+                      data-testid="button-edit-referral"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
               {inquiry.initialNotes && (
                 <div className="sm:col-span-2">
