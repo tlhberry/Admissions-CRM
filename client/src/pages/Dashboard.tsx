@@ -47,7 +47,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
-  insurance_collection: FileText,
   vob_pending: Clock,
   quote_client: DollarSign,
   pre_assessment: ClipboardCheck,
@@ -59,7 +58,6 @@ const stageIcons: Record<PipelineStage, typeof Phone> = {
 
 const stageColors: Record<PipelineStage, string> = {
   inquiry: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
-  insurance_collection: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
   vob_pending: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
   quote_client: "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300",
   pre_assessment: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
@@ -101,7 +99,6 @@ export default function Dashboard() {
 
   const activeStages: PipelineStage[] = [
     "inquiry",
-    "insurance_collection",
     "vob_pending",
     "quote_client",
     "pre_assessment",

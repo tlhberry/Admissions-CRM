@@ -38,10 +38,9 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
-// Pipeline stages enum (viability_check removed - inquiry goes directly to insurance_collection)
+// Pipeline stages enum (inquiry goes directly to vob_pending)
 export const pipelineStages = [
   "inquiry",
-  "insurance_collection",
   "vob_pending",
   "quote_client",
   "pre_assessment",
@@ -246,7 +245,6 @@ export type UpdateInquiry = z.infer<typeof updateInquirySchema>;
 // Stage display names
 export const stageDisplayNames: Record<PipelineStage, string> = {
   inquiry: "New Inquiry",
-  insurance_collection: "Insurance Info",
   vob_pending: "VOB Pending",
   quote_client: "Quote Client",
   pre_assessment: "Pre-Assessment",

@@ -118,7 +118,6 @@ export default function Analytics() {
     
     const stageOrder: PipelineStage[] = [
       "inquiry",
-      "insurance_collection",
       "vob_pending",
       "quote_client",
       "pre_assessment",

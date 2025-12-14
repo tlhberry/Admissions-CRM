@@ -41,15 +41,14 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 ```
 
 ## Pipeline Stages
-1. **Inquiry** - New call/inquiry received
-2. **Insurance Collection** - Gather insurance information
-3. **VOB Pending** - Verification of Benefits in progress
-4. **Quote Client** - Present costs to client
-5. **Pre-Assessment** - Complete pre-admission assessment
-6. **Scheduled** - Admission scheduled (triggers email notification)
-7. **Admitted** - Client has been admitted
-8. **Non-Viable** - Client cannot proceed (with reason tracking)
-9. **Lost Client** - Viable client who did not proceed (with reason tracking)
+1. **Inquiry** - New call/inquiry received (collect insurance info here)
+2. **VOB Pending** - Verification of Benefits in progress
+3. **Quote Client** - Present costs to client
+4. **Pre-Assessment** - Complete pre-admission assessment
+5. **Scheduled** - Admission scheduled (triggers email notification)
+6. **Admitted** - Client has been admitted
+7. **Non-Viable** - Client cannot proceed (with reason tracking)
+8. **Lost Client** - Viable client who did not proceed (with reason tracking)
 
 ## Features
 

@@ -42,26 +42,24 @@ import { format } from "date-fns";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
-  viability_check: ClipboardCheck,
-  insurance_collection: FileText,
   vob_pending: Clock,
   quote_client: DollarSign,
   pre_assessment: ClipboardCheck,
   scheduled: Calendar,
   admitted: UserCheck,
   non_viable: XCircle,
+  lost: XCircle,
 };
 
 const stageColors: Record<PipelineStage, string> = {
   inquiry: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
-  viability_check: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
-  insurance_collection: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
   vob_pending: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
   quote_client: "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300",
   pre_assessment: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
   scheduled: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
   admitted: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
   non_viable: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
+  lost: "bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300",
 };
 
 interface SearchFilters {
