@@ -1,0 +1,71 @@
+BED BOARD (SIMPLE) + TOTAL BEDS ADMIN SETTING
+DO NOT CHANGE EXISTING WORKFLOWS OR PIPELINE STAGES EXCEPT DISPLAYING BED METRICS.
+
+Goal:
+Add a simple Bed Board that shows:
+- Total Beds (admin-configurable per company)
+- Currently Admitted (auto-calculated)
+- Beds Available (auto-calculated)
+This must work per Company (tenant) with strict isolation.
+
+---------------------------------------
+1) ADMIN SETTING: TOTAL BEDS
+---------------------------------------
+In Admin Settings > Company (or Admin Settings > Billing/Operations), add a field:
+- Total Beds (integer)
+Default value for the Gulf Breeze company: 32
+Admins can edit this at any time.
+
+Store in DB per companyId:
+company_settings:
+- companyId
+- totalBeds (int, default 32)
+- updatedAt
+
+Only Admins can edit totalBeds.
+
+---------------------------------------
+2) DEFINE "CURRENTLY ADMITTED"
+---------------------------------------
+Currently Admitted = count of patients/records in the pipeline stage named "Admitted"
+for that same companyId.
+
+If your app uses a different admitted status field, use the existing source of truth.
+Do not change the definition of "Admitted" stage. Only read it.
+
+---------------------------------------
+3) AUTO CALCULATIONS
+---------------------------------------
+bedsAvailable = max(totalBeds - currentlyAdmitted, 0)
+
+Display these metrics:
+- Total Beds
+- Currently Admitted
+- Beds Available
+
+Update live whenever a record moves into or out of Admitted stage.
+
+---------------------------------------
+4) UI PLACEMENT
+---------------------------------------
+Add a simple Bed Board line in two places:
+A) Top of Pipeline Overview page (small card)
+B) A standalone Bed Board page accessible from navigation (optional but preferred)
+
+The Bed Board page can list:
+- the same 3 metrics
+- optional list of admitted clients (name + admit date) for quick census view
+
+---------------------------------------
+5) MULTI-TENANT SECURITY
+---------------------------------------
+All queries must filter by companyId from authenticated session.
+No company can see another company's bed counts or admitted list.
+
+---------------------------------------
+6) STRICT RULES
+---------------------------------------
+- Do NOT change existing pipeline logic
+- Do NOT create new stages
+- Do NOT modify admissions workflow
+- Only add settings + display + calculations

@@ -44,6 +44,8 @@ export const companies = pgTable("companies", {
   aiBudgetLimitCents: integer("ai_budget_limit_cents"), // Monthly budget limit in cents (null = unlimited)
   aiUsageThisMonthCents: integer("ai_usage_this_month_cents").default(0), // Current month's usage in cents
   aiUsageResetDate: timestamp("ai_usage_reset_date"), // When to reset monthly usage counter
+  // Bed Board settings
+  totalBeds: integer("total_beds").default(32), // Total beds available at facility
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
