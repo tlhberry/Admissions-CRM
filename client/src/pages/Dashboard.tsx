@@ -326,31 +326,40 @@ export default function Dashboard() {
           >
             <Card className="overflow-visible border-primary/20 hover-elevate active-elevate-2">
               <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-primary/10 text-primary flex-shrink-0">
-                    <Bed className="w-6 h-6" />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center bg-primary/10 text-primary flex-shrink-0">
+                    <Bed className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg">Bed Board</h3>
-                    <p className="text-sm text-muted-foreground">Real-time bed availability</p>
-                  </div>
-                  <div className="flex items-center gap-6 flex-shrink-0">
+                    <h3 className="font-semibold sm:text-lg">Bed Board</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Real-time bed availability</p>
                     {bedMetricsLoading ? (
-                      <Skeleton className="h-10 w-48" />
+                      <Skeleton className="h-4 w-24 mt-1 sm:hidden" />
+                    ) : bedMetricsError ? (
+                      <p className="text-xs text-muted-foreground sm:hidden">Unable to load</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground sm:hidden">
+                        {bedMetrics?.bedsAvailable ?? 0} beds available
+                      </p>
+                    )}
+                  </div>
+                  <div className="hidden sm:flex items-center gap-4 md:gap-6 flex-shrink-0">
+                    {bedMetricsLoading ? (
+                      <Skeleton className="h-10 w-36 md:w-48" />
                     ) : bedMetricsError ? (
                       <p className="text-sm text-muted-foreground">Unable to load metrics</p>
                     ) : (
                       <>
                         <div className="text-center">
-                          <p className="text-2xl font-bold">{bedMetrics?.totalBeds ?? 0}</p>
-                          <p className="text-xs text-muted-foreground">Total Beds</p>
+                          <p className="text-xl md:text-2xl font-bold">{bedMetrics?.totalBeds ?? 0}</p>
+                          <p className="text-xs text-muted-foreground">Total</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{bedMetrics?.currentlyAdmitted ?? 0}</p>
+                          <p className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">{bedMetrics?.currentlyAdmitted ?? 0}</p>
                           <p className="text-xs text-muted-foreground">Admitted</p>
                         </div>
                         <div className="text-center">
-                          <p className={`text-2xl font-bold ${(bedMetrics?.bedsAvailable ?? 0) <= 2 ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                          <p className={`text-xl md:text-2xl font-bold ${(bedMetrics?.bedsAvailable ?? 0) <= 2 ? "text-amber-600 dark:text-amber-400" : ""}`}>
                             {bedMetrics?.bedsAvailable ?? 0}
                           </p>
                           <p className="text-xs text-muted-foreground">Available</p>
