@@ -23,6 +23,118 @@ import path from "path";
 import fs from "fs";
 import OpenAI from "openai";
 
+// Helper function to transcribe call and extract data (used by CTM webhook)
+async function transcribeAndExtractCallData(inquiryId: number, companyId: number, recordingUrl: string): Promise<void> {
+  try {
+    console.log(`Auto-transcribing call for inquiry #${inquiryId}...`);
+    
+    const openai = new OpenAI({
+      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    });
+
+    // Download the audio file
+    const audioResponse = await fetch(recordingUrl);
+    if (!audioResponse.ok) {
+      console.error(`Failed to download call recording for inquiry #${inquiryId}`);
+      return;
+    }
+
+    const audioBuffer = await audioResponse.arrayBuffer();
+    const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
+    const audioFile = new File([audioBlob], "recording.mp3", { type: "audio/mpeg" });
+
+    // Transcribe with Whisper
+    const transcriptionResponse = await openai.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-1",
+      response_format: "text",
+    });
+
+    const transcription = transcriptionResponse;
+    console.log(`Transcription completed for inquiry #${inquiryId}: ${transcription.substring(0, 100)}...`);
+
+    // Extract data from transcription using GPT
+    const extractionPrompt = `You are an addiction treatment center admissions specialist. Analyze this call transcription and extract key information.
+
+Return a JSON object with these fields (use null if not clearly mentioned):
+{
+  "callerName": "Full name of the caller or person calling on behalf of client",
+  "clientName": "Name of the person seeking treatment (may be same as caller)",
+  "phoneNumber": "Phone number if mentioned",
+  "email": "Email address if mentioned",
+  "insuranceProvider": "Insurance company name",
+  "insurancePolicyId": "Insurance policy or member ID",
+  "presentingIssues": "Brief description of substance use or mental health issues mentioned",
+  "urgency": "low", "medium", or "high" based on crisis indicators,
+  "callSummary": "2-3 sentence professional summary of the call suitable for clinical staff"
+}
+
+Transcription:
+${transcription}`;
+
+    const extractionResponse = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: extractionPrompt }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const extractedContent = extractionResponse.choices[0]?.message?.content;
+    if (!extractedContent) {
+      console.error(`Failed to extract data from transcription for inquiry #${inquiryId}`);
+      return;
+    }
+
+    const extractedData = JSON.parse(extractedContent);
+    console.log(`Extracted data for inquiry #${inquiryId}:`, extractedData);
+
+    // Get current inquiry to check existing fields
+    const inquiry = await storage.getInquiry(inquiryId, companyId);
+    if (!inquiry) {
+      console.error(`Inquiry #${inquiryId} not found after transcription`);
+      return;
+    }
+
+    // Update inquiry with transcription and extracted data
+    const updateData: any = {
+      transcription,
+      aiExtractedData: extractedData,
+      callSummary: extractedData.callSummary || null,
+    };
+
+    // Only update fields that are currently empty/default and have extracted values
+    if ((!inquiry.callerName || inquiry.callerName === "Incoming Call") && extractedData.callerName) {
+      updateData.callerName = extractedData.callerName;
+    }
+    if (!inquiry.clientName && extractedData.clientName) {
+      updateData.clientName = extractedData.clientName;
+    }
+    if (!inquiry.email && extractedData.email) {
+      updateData.email = extractedData.email;
+    }
+    if (!inquiry.insuranceProvider && extractedData.insuranceProvider) {
+      updateData.insuranceProvider = extractedData.insuranceProvider;
+    }
+    if (!inquiry.insurancePolicyId && extractedData.insurancePolicyId) {
+      updateData.insurancePolicyId = extractedData.insurancePolicyId;
+    }
+
+    // Append presenting issues to initial notes if available
+    if (extractedData.presentingIssues) {
+      const existingNotes = inquiry.initialNotes || "";
+      const separator = existingNotes ? "\n\n---\nAI-Extracted Issues: " : "AI-Extracted Issues: ";
+      updateData.initialNotes = existingNotes + separator + extractedData.presentingIssues;
+    }
+
+    await storage.updateInquiry(inquiryId, companyId, updateData);
+    console.log(`Auto-transcription complete for inquiry #${inquiryId}. Updated fields: ${Object.keys(updateData).join(", ")}`);
+  } catch (error) {
+    console.error(`Error in auto-transcription for inquiry #${inquiryId}:`, error);
+  }
+}
+
 // Helper to get user with companyId from request
 async function getUserWithCompany(req: any): Promise<User | null> {
   const userId = req.user?.claims?.sub;
@@ -713,11 +825,21 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       });
 
       console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber} (company: ${company.name})`);
+      
+      // Trigger auto-transcription if recording URL is available
+      // This runs asynchronously so the webhook responds quickly
+      if (callRecordingUrl) {
+        console.log(`CTM webhook: Triggering auto-transcription for inquiry #${inquiry.id}`);
+        transcribeAndExtractCallData(inquiry.id, company.id, callRecordingUrl)
+          .catch(err => console.error(`Auto-transcription failed for inquiry #${inquiry.id}:`, err));
+      }
+      
       res.status(201).json({ 
         success: true, 
         inquiryId: inquiry.id,
         message: "Inquiry created from CTM webhook",
         caller: phoneNumber,
+        autoTranscriptionTriggered: !!callRecordingUrl,
       });
     } catch (error) {
       console.error("CTM webhook error:", error);
