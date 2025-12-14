@@ -66,6 +66,7 @@ import {
   onlineReferralSourceDisplayNames,
 } from "@shared/schema";
 import { format } from "date-fns";
+import { PreAssessmentForms } from "@/components/PreAssessmentForms";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
@@ -546,6 +547,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
 
         {stage === "pre_assessment" && (
           <PreAssessmentSection
+            inquiryId={inquiry.id}
             onComplete={(notes) => updateMutation.mutate({ preAssessmentCompleted: "yes", preAssessmentDate: new Date(), preAssessmentNotes: notes, stage: "scheduled" })}
             isPending={updateMutation.isPending}
           />
@@ -1591,9 +1593,11 @@ function QuoteSection({
 }
 
 function PreAssessmentSection({
+  inquiryId,
   onComplete,
   isPending,
 }: {
+  inquiryId: number;
   onComplete: (notes: string) => void;
   isPending: boolean;
 }) {
@@ -1609,14 +1613,18 @@ function PreAssessmentSection({
           <div>
             <CardTitle className="text-xl">Pre-Assessment</CardTitle>
             <CardDescription>
-              Complete the clinical screening to ensure client is appropriate
+              Complete all three clinical forms before proceeding
             </CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        <PreAssessmentForms inquiryId={inquiryId} />
+
+        <Separator />
+
         <div className="space-y-2">
-          <label className="text-sm font-medium">Assessment Notes</label>
+          <label className="text-sm font-medium">Additional Assessment Notes</label>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -1641,7 +1649,7 @@ function PreAssessmentSection({
           ) : (
             <>
               <CheckCircle2 className="w-5 h-5 mr-2" />
-              Pre-Assessment Complete
+              Pre-Assessment Complete - Schedule Admission
             </>
           )}
         </Button>
