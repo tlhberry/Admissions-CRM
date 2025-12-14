@@ -1,10 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   ArrowLeft,
   Heart,
@@ -15,6 +22,7 @@ import {
   CalendarDays,
   Trophy,
   Handshake,
+  Filter,
 } from "lucide-react";
 import {
   BarChart,
@@ -28,7 +36,9 @@ import {
 } from "recharts";
 import type { Inquiry, ReferralSource, User, ActivityLog } from "@shared/schema";
 import { referralSourceDisplayNames } from "@shared/schema";
-import { startOfWeek, startOfMonth, startOfYear, subMonths, isAfter, parseISO } from "date-fns";
+import { startOfWeek, startOfMonth, startOfYear, subMonths, isAfter, isBefore, format } from "date-fns";
+
+type DateRangeFilter = "week" | "month" | "3months" | "year" | "custom";
 
 const CHART_COLORS = [
   "hsl(var(--primary))",
@@ -40,6 +50,9 @@ const CHART_COLORS = [
 
 export default function Reports() {
   const [, navigate] = useLocation();
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>("month");
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   const { data: inquiries, isLoading: inquiriesLoading } = useQuery<Inquiry[]>({
     queryKey: ["/api/inquiries"],
@@ -61,38 +74,125 @@ export default function Reports() {
   const thisYearStart = startOfYear(now);
   const threeMonthsAgo = subMonths(now, 3);
 
+  const getFilterStartDate = (): Date => {
+    switch (dateFilter) {
+      case "week":
+        return thisWeekStart;
+      case "month":
+        return thisMonthStart;
+      case "3months":
+        return threeMonthsAgo;
+      case "year":
+        return thisYearStart;
+      case "custom":
+        return customStartDate || threeMonthsAgo;
+      default:
+        return thisMonthStart;
+    }
+  };
+
+  const getFilterEndDate = (): Date => {
+    if (dateFilter === "custom" && customEndDate) {
+      return customEndDate;
+    }
+    return now;
+  };
+
   const getAdmittedInquiries = () => {
     return inquiries?.filter((i) => i.stage === "admitted") || [];
   };
 
-  const filterByDateRange = (admissions: Inquiry[], startDate: Date) => {
+  const filterByDateRange = (admissions: Inquiry[], startDate: Date, endDate?: Date) => {
     return admissions.filter((i) => {
       if (!i.actualAdmitDate) return false;
-      const admitDate = parseISO(i.actualAdmitDate);
-      return isAfter(admitDate, startDate) || admitDate.toDateString() === startDate.toDateString();
+      const admitDate = typeof i.actualAdmitDate === 'string' ? new Date(i.actualAdmitDate) : i.actualAdmitDate;
+      const afterStart = isAfter(admitDate, startDate) || admitDate.toDateString() === startDate.toDateString();
+      if (endDate) {
+        const beforeEnd = isBefore(admitDate, endDate) || admitDate.toDateString() === endDate.toDateString();
+        return afterStart && beforeEnd;
+      }
+      return afterStart;
+    });
+  };
+
+  const filterInquiriesByDateRange = (inqs: Inquiry[], startDate: Date, endDate?: Date) => {
+    return inqs.filter((i) => {
+      if (!i.createdAt) return false;
+      const createdDate = new Date(i.createdAt);
+      const afterStart = isAfter(createdDate, startDate) || createdDate.toDateString() === startDate.toDateString();
+      if (endDate) {
+        const beforeEnd = isBefore(createdDate, endDate) || createdDate.toDateString() === endDate.toDateString();
+        return afterStart && beforeEnd;
+      }
+      return afterStart;
+    });
+  };
+
+  const filterActivitiesByDateRange = (acts: ActivityLog[], startDate: Date, endDate?: Date) => {
+    return acts.filter((a) => {
+      if (!a.activityDate) return false;
+      const actDate = new Date(a.activityDate);
+      const afterStart = isAfter(actDate, startDate) || actDate.toDateString() === startDate.toDateString();
+      if (endDate) {
+        const beforeEnd = isBefore(actDate, endDate) || actDate.toDateString() === endDate.toDateString();
+        return afterStart && beforeEnd;
+      }
+      return afterStart;
     });
   };
 
   const admitted = getAdmittedInquiries();
+  const filterStart = getFilterStartDate();
+  const filterEnd = getFilterEndDate();
+  
+  const filteredAdmits = filterByDateRange(admitted, filterStart, dateFilter === "custom" ? filterEnd : undefined);
+  const filteredInquiries = filterInquiriesByDateRange(inquiries || [], filterStart, dateFilter === "custom" ? filterEnd : undefined);
+  const filteredActivities = filterActivitiesByDateRange(activities || [], filterStart, dateFilter === "custom" ? filterEnd : undefined);
+
   const admitsThisWeek = filterByDateRange(admitted, thisWeekStart);
   const admitsThisMonth = filterByDateRange(admitted, thisMonthStart);
   const admitsThisYear = filterByDateRange(admitted, thisYearStart);
   const admitsPast3Months = filterByDateRange(admitted, threeMonthsAgo);
 
-  const totalInquiries = inquiries?.length || 0;
-  const conversionRate = totalInquiries > 0 ? ((admitted.length / totalInquiries) * 100).toFixed(1) : "0";
+  const getFilterLabel = () => {
+    switch (dateFilter) {
+      case "week":
+        return "This Week";
+      case "month":
+        return "This Month";
+      case "3months":
+        return "Past 3 Months";
+      case "year":
+        return "This Year";
+      case "custom":
+        if (customStartDate && customEndDate) {
+          return `${format(customStartDate, "MMM d")} - ${format(customEndDate, "MMM d, yyyy")}`;
+        }
+        return "Custom Range";
+      default:
+        return "This Month";
+    }
+  };
+
+  const totalInquiries = filteredInquiries.length;
+  const totalAdmits = filteredAdmits.length;
+  const conversionRate = totalInquiries > 0 ? ((totalAdmits / totalInquiries) * 100).toFixed(1) : "0";
 
   const getReferralSourcePerformance = () => {
-    if (!inquiries) return [];
+    if (!filteredInquiries.length) return [];
     const sourceCounts: Record<string, { total: number; admitted: number }> = {};
     
-    inquiries.forEach((inquiry) => {
+    filteredInquiries.forEach((inquiry) => {
       const source = inquiry.referralSource || "unknown";
       if (!sourceCounts[source]) {
         sourceCounts[source] = { total: 0, admitted: 0 };
       }
       sourceCounts[source].total++;
-      if (inquiry.stage === "admitted") {
+    });
+    
+    filteredAdmits.forEach((inquiry) => {
+      const source = inquiry.referralSource || "unknown";
+      if (sourceCounts[source]) {
         sourceCounts[source].admitted++;
       }
     });
@@ -105,16 +205,16 @@ export default function Reports() {
         admitted: counts.admitted,
         conversionRate: counts.total > 0 ? Number(((counts.admitted / counts.total) * 100).toFixed(1)) : 0,
       }))
-      .filter((item) => item.admitted > 0)
+      .filter((item) => item.total > 0)
       .sort((a, b) => b.admitted - a.admitted);
   };
 
   const getBDRepLeaderboard = () => {
-    if (!inquiries || !users) return [];
+    if (!users) return [];
     
     const repCounts: Record<string, number> = {};
     
-    admitted.forEach((inquiry) => {
+    filteredAdmits.forEach((inquiry) => {
       if (inquiry.userId) {
         repCounts[inquiry.userId] = (repCounts[inquiry.userId] || 0) + 1;
       }
@@ -133,9 +233,9 @@ export default function Reports() {
   };
 
   const getBDRepActivitySummary = () => {
-    if (!activities || !users) return [];
+    if (!users) return [];
     
-    const faceToFaceActivities = activities.filter((a) => a.activityType === "face_to_face");
+    const faceToFaceActivities = filteredActivities.filter((a) => a.activityType === "face_to_face");
     const repCounts: Record<string, number> = {};
     
     faceToFaceActivities.forEach((activity) => {
@@ -184,10 +284,107 @@ export default function Reports() {
 
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold mb-2">Admissions Reports</h2>
-          <p className="text-muted-foreground">
-            Track admissions performance, referral sources, and BD rep activity
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold mb-2">Admissions Reports</h2>
+              <p className="text-muted-foreground">
+                Track admissions performance, referral sources, and BD rep activity
+              </p>
+            </div>
+          </div>
+          
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground mr-2">Date Range:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={dateFilter === "week" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateFilter("week")}
+                  data-testid="button-filter-week"
+                >
+                  This Week
+                </Button>
+                <Button
+                  variant={dateFilter === "month" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateFilter("month")}
+                  data-testid="button-filter-month"
+                >
+                  This Month
+                </Button>
+                <Button
+                  variant={dateFilter === "3months" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateFilter("3months")}
+                  data-testid="button-filter-3months"
+                >
+                  Past 3 Months
+                </Button>
+                <Button
+                  variant={dateFilter === "year" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDateFilter("year")}
+                  data-testid="button-filter-year"
+                >
+                  This Year
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={dateFilter === "custom" ? "default" : "outline"}
+                      size="sm"
+                      data-testid="button-filter-custom"
+                    >
+                      <CalendarDays className="w-4 h-4 mr-1" />
+                      {dateFilter === "custom" && customStartDate && customEndDate
+                        ? `${format(customStartDate, "MMM d")} - ${format(customEndDate, "MMM d")}`
+                        : "Custom"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <p className="text-sm font-medium mb-2">Start Date</p>
+                        <Calendar
+                          mode="single"
+                          selected={customStartDate}
+                          onSelect={(date) => {
+                            setCustomStartDate(date);
+                            if (date) {
+                              setDateFilter("custom");
+                              if (customEndDate && date > customEndDate) {
+                                setCustomEndDate(undefined);
+                              }
+                            }
+                          }}
+                          initialFocus
+                        />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium mb-2">End Date</p>
+                        <Calendar
+                          mode="single"
+                          selected={customEndDate}
+                          disabled={(date) => customStartDate ? date < customStartDate : false}
+                          onSelect={(date) => {
+                            setCustomEndDate(date);
+                            if (date) setDateFilter("custom");
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            {dateFilter !== "month" && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Showing data for: <span className="font-medium">{getFilterLabel()}</span>
+              </p>
+            )}
+          </Card>
         </div>
 
         {/* Admission Stats Cards */}
@@ -262,10 +459,10 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-              Overall Conversion Rate
+              Conversion Rate ({getFilterLabel()})
             </CardTitle>
             <CardDescription>
-              Percentage of total inquiries that resulted in admissions
+              Percentage of inquiries that resulted in admissions for selected period
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -277,7 +474,7 @@ export default function Reports() {
                   {conversionRate}%
                 </span>
                 <span className="text-muted-foreground">
-                  ({admitted.length} of {totalInquiries} inquiries)
+                  ({totalAdmits} of {totalInquiries} inquiries)
                 </span>
               </div>
             )}

@@ -1,10 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   ArrowLeft,
   Heart,
@@ -15,6 +22,8 @@ import {
   XCircle,
   BarChart3,
   PieChart,
+  CalendarDays,
+  Filter,
 } from "lucide-react";
 import {
   BarChart,
@@ -34,10 +43,10 @@ import {
   stageDisplayNames,
   referralSourceDisplayNames,
   nonViableReasonDisplayNames,
-  pipelineStages,
-  referralSources,
-  nonViableReasons,
 } from "@shared/schema";
+import { startOfWeek, startOfMonth, startOfYear, subMonths, isAfter, isBefore, format } from "date-fns";
+
+type DateRangeFilter = "week" | "month" | "3months" | "year" | "custom";
 
 const CHART_COLORS = [
   "hsl(var(--primary))",
@@ -53,6 +62,9 @@ const CHART_COLORS = [
 
 export default function Analytics() {
   const [, navigate] = useLocation();
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>("month");
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   const { data: inquiries, isLoading } = useQuery<Inquiry[]>({
     queryKey: ["/api/inquiries"],
@@ -62,17 +74,84 @@ export default function Analytics() {
     queryKey: ["/api/users"],
   });
 
-  const totalInquiries = inquiries?.length || 0;
-  const admittedCount = inquiries?.filter((i) => i.stage === "admitted").length || 0;
-  const nonViableCount = inquiries?.filter((i) => i.stage === "non_viable").length || 0;
-  const activeCount = totalInquiries - admittedCount - nonViableCount;
+  const now = new Date();
+  const thisWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const thisMonthStart = startOfMonth(now);
+  const thisYearStart = startOfYear(now);
+  const threeMonthsAgo = subMonths(now, 3);
+
+  const getFilterStartDate = (): Date => {
+    switch (dateFilter) {
+      case "week":
+        return thisWeekStart;
+      case "month":
+        return thisMonthStart;
+      case "3months":
+        return threeMonthsAgo;
+      case "year":
+        return thisYearStart;
+      case "custom":
+        return customStartDate || threeMonthsAgo;
+      default:
+        return thisMonthStart;
+    }
+  };
+
+  const getFilterEndDate = (): Date => {
+    if (dateFilter === "custom" && customEndDate) {
+      return customEndDate;
+    }
+    return now;
+  };
+
+  const filterInquiriesByDateRange = (inqs: Inquiry[], startDate: Date, endDate?: Date) => {
+    return inqs.filter((i) => {
+      if (!i.createdAt) return false;
+      const createdDate = new Date(i.createdAt);
+      const afterStart = isAfter(createdDate, startDate) || createdDate.toDateString() === startDate.toDateString();
+      if (endDate) {
+        const beforeEnd = isBefore(createdDate, endDate) || createdDate.toDateString() === endDate.toDateString();
+        return afterStart && beforeEnd;
+      }
+      return afterStart;
+    });
+  };
+
+  const getFilterLabel = () => {
+    switch (dateFilter) {
+      case "week":
+        return "This Week";
+      case "month":
+        return "This Month";
+      case "3months":
+        return "Past 3 Months";
+      case "year":
+        return "This Year";
+      case "custom":
+        if (customStartDate && customEndDate) {
+          return `${format(customStartDate, "MMM d")} - ${format(customEndDate, "MMM d, yyyy")}`;
+        }
+        return "Custom Range";
+      default:
+        return "This Month";
+    }
+  };
+
+  const filterStart = getFilterStartDate();
+  const filterEnd = getFilterEndDate();
+  const filteredInquiries = filterInquiriesByDateRange(inquiries || [], filterStart, dateFilter === "custom" ? filterEnd : undefined);
+
+  const totalInquiries = filteredInquiries.length;
+  const admittedCount = filteredInquiries.filter((i) => i.stage === "admitted").length;
+  const nonViableCount = filteredInquiries.filter((i) => i.stage === "non_viable").length;
+  const lostClientCount = filteredInquiries.filter((i) => i.stage === "lost").length;
   const conversionRate = totalInquiries > 0 ? ((admittedCount / totalInquiries) * 100).toFixed(1) : "0";
 
   const getReferralSourceData = () => {
-    if (!inquiries) return [];
+    if (!filteredInquiries.length) return [];
     const sourceCounts: Record<string, { total: number; admitted: number }> = {};
     
-    inquiries.forEach((inquiry) => {
+    filteredInquiries.forEach((inquiry) => {
       const source = inquiry.referralSource || "unknown";
       if (!sourceCounts[source]) {
         sourceCounts[source] = { total: 0, admitted: 0 };
@@ -94,10 +173,10 @@ export default function Analytics() {
   };
 
   const getNonViableReasonsData = () => {
-    if (!inquiries) return [];
+    if (!filteredInquiries.length) return [];
     const reasonCounts: Record<string, number> = {};
     
-    inquiries
+    filteredInquiries
       .filter((i) => i.stage === "non_viable" && i.nonViableReason)
       .forEach((inquiry) => {
         const reason = inquiry.nonViableReason!;
@@ -113,7 +192,7 @@ export default function Analytics() {
   };
 
   const getStageDropOffData = () => {
-    if (!inquiries) return [];
+    if (!filteredInquiries.length) return [];
     const stageCounts: Record<string, number> = {};
     
     const stageOrder: PipelineStage[] = [
@@ -126,7 +205,7 @@ export default function Analytics() {
     ];
 
     stageOrder.forEach((stage) => {
-      stageCounts[stage] = inquiries.filter((i) => i.stage === stage).length;
+      stageCounts[stage] = filteredInquiries.filter((i) => i.stage === stage).length;
     });
 
     let cumulative = totalInquiries;
@@ -144,10 +223,10 @@ export default function Analytics() {
   };
 
   const getBdRepPerformanceData = () => {
-    if (!inquiries || !users) return [];
+    if (!filteredInquiries.length || !users) return [];
     const repCounts: Record<string, { total: number; admitted: number; name: string }> = {};
     
-    inquiries.forEach((inquiry) => {
+    filteredInquiries.forEach((inquiry) => {
       const userId = inquiry.userId || "unassigned";
       if (!repCounts[userId]) {
         const user = users.find((u) => u.id === userId);
@@ -202,6 +281,99 @@ export default function Analytics() {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-6xl">
+        <Card className="p-4 mb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground mr-2">Date Range:</span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={dateFilter === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("week")}
+                data-testid="button-filter-week"
+              >
+                This Week
+              </Button>
+              <Button
+                variant={dateFilter === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("month")}
+                data-testid="button-filter-month"
+              >
+                This Month
+              </Button>
+              <Button
+                variant={dateFilter === "3months" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("3months")}
+                data-testid="button-filter-3months"
+              >
+                Past 3 Months
+              </Button>
+              <Button
+                variant={dateFilter === "year" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("year")}
+                data-testid="button-filter-year"
+              >
+                This Year
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={dateFilter === "custom" ? "default" : "outline"}
+                    size="sm"
+                    data-testid="button-filter-custom"
+                  >
+                    <CalendarDays className="w-4 h-4 mr-1" />
+                    {dateFilter === "custom" && customStartDate && customEndDate
+                      ? `${format(customStartDate, "MMM d")} - ${format(customEndDate, "MMM d")}`
+                      : "Custom"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <div className="p-4 space-y-4">
+                    <div>
+                      <p className="text-sm font-medium mb-2">Start Date</p>
+                      <Calendar
+                        mode="single"
+                        selected={customStartDate}
+                        onSelect={(date) => {
+                          setCustomStartDate(date);
+                          if (date) {
+                            setDateFilter("custom");
+                            if (customEndDate && date > customEndDate) {
+                              setCustomEndDate(undefined);
+                            }
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium mb-2">End Date</p>
+                      <Calendar
+                        mode="single"
+                        selected={customEndDate}
+                        disabled={(date) => customStartDate ? date < customStartDate : false}
+                        onSelect={(date) => {
+                          setCustomEndDate(date);
+                          if (date) setDateFilter("custom");
+                        }}
+                      />
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          {dateFilter !== "month" && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Showing data for: <span className="font-medium">{getFilterLabel()}</span>
+            </p>
+          )}
+        </Card>
+
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
           <Card data-testid="card-total-inquiries">
             <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -276,7 +448,7 @@ export default function Analytics() {
                 <CardTitle className="text-lg">Inquiries by Referral Source</CardTitle>
               </div>
               <CardDescription>
-                Total inquiries and conversions by source
+                Total inquiries and conversions by source ({getFilterLabel()})
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -320,7 +492,7 @@ export default function Analytics() {
                 <CardTitle className="text-lg">Non-Viable Reasons</CardTitle>
               </div>
               <CardDescription>
-                Breakdown of why inquiries were marked non-viable
+                Breakdown of why inquiries were marked non-viable ({getFilterLabel()})
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -369,7 +541,7 @@ export default function Analytics() {
               <CardTitle className="text-lg">Pipeline Stage Distribution</CardTitle>
             </div>
             <CardDescription>
-              Current count of inquiries at each stage
+              Current count of inquiries at each stage ({getFilterLabel()})
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -406,11 +578,11 @@ export default function Analytics() {
           </CardContent>
         </Card>
 
-        <Card data-testid="chart-bd-rep-performance">
+        <Card data-testid="chart-bd-rep-performance" className="mb-8">
           <CardHeader>
             <CardTitle className="text-lg">Admits by Team Member</CardTitle>
             <CardDescription>
-              Performance tracking by user
+              Performance tracking by user ({getFilterLabel()})
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -459,7 +631,7 @@ export default function Analytics() {
           <CardHeader>
             <CardTitle className="text-lg">Conversion Rates by Referral Source</CardTitle>
             <CardDescription>
-              Detailed breakdown with conversion percentages
+              Detailed breakdown with conversion percentages ({getFilterLabel()})
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -54,6 +54,8 @@ import {
   Check,
   Pencil,
   Mail,
+  Wand2,
+  Sparkles,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource } from "@shared/schema";
 import {
@@ -870,6 +872,9 @@ function InsuranceForm({
   onNonViable: () => void;
   isPending: boolean;
 }) {
+  const { toast } = useToast();
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  
   const form = useForm({
     resolver: zodResolver(insuranceSchema),
     defaultValues: {
@@ -882,17 +887,80 @@ function InsuranceForm({
     },
   });
 
+  const handleAIAutoFill = async () => {
+    setIsTranscribing(true);
+    try {
+      const response = await apiRequest("POST", `/api/inquiries/${inquiry.id}/transcribe`);
+      const result = await response.json();
+      
+      if (result.success && result.extractedData) {
+        const data = result.extractedData;
+        if (data.callerName && !form.getValues("callerName")) {
+          form.setValue("callerName", data.callerName);
+        }
+        if (data.clientName && !form.getValues("clientName")) {
+          form.setValue("clientName", data.clientName);
+        }
+        if (data.insuranceProvider && !form.getValues("insuranceProvider")) {
+          form.setValue("insuranceProvider", data.insuranceProvider);
+        }
+        if (data.insurancePolicyId && !form.getValues("insurancePolicyId")) {
+          form.setValue("insurancePolicyId", data.insurancePolicyId);
+        }
+        
+        queryClient.invalidateQueries({ queryKey: [`/api/inquiries/${inquiry.id}`] });
+        
+        toast({
+          title: "Call Transcribed",
+          description: "Form fields have been auto-filled from the call recording.",
+        });
+      }
+    } catch (error) {
+      console.error("Transcription error:", error);
+      toast({
+        title: "Transcription Failed",
+        description: "Could not transcribe the call recording. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-            <FileText className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+              <FileText className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">Insurance Information</CardTitle>
+              <CardDescription>Collect client insurance details</CardDescription>
+            </div>
           </div>
-          <div>
-            <CardTitle className="text-xl">Insurance Information</CardTitle>
-            <CardDescription>Collect client insurance details</CardDescription>
-          </div>
+          {inquiry.callRecordingUrl && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAIAutoFill}
+              disabled={isTranscribing}
+              data-testid="button-ai-autofill"
+            >
+              {isTranscribing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Transcribing...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-4 h-4 mr-2" />
+                  AI Auto-Fill
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -1013,6 +1081,18 @@ function InsuranceForm({
                 </FormItem>
               )}
             />
+
+            {inquiry.callSummary && (
+              <div className="p-4 rounded-lg bg-muted/50 border border-muted">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">AI Call Summary</span>
+                </div>
+                <p className="text-sm text-muted-foreground" data-testid="text-call-summary">
+                  {inquiry.callSummary}
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3">
               <Button

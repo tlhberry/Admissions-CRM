@@ -239,6 +239,7 @@ export const inquiries = pgTable("inquiries", {
   callRecordingUrl: text("call_recording_url"),
   transcription: text("transcription"),
   aiExtractedData: jsonb("ai_extracted_data"),
+  callSummary: text("call_summary"),
   
   // CTM Integration Fields
   ctmCallId: varchar("ctm_call_id", { length: 100 }),

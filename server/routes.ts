@@ -497,6 +497,15 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       const callRecordingUrl = callData.recording_url || callData.recording || callData.audio_url || null;
       const ctmSource = callData.tracking_source || callData.source || callData.campaign || null;
       
+      // Auto-detect Google PPC from tracking source
+      const sourceString = (ctmSource || "").toLowerCase();
+      const isPaidCampaign = sourceString.includes("ppc") || 
+                              sourceString.includes("paid") || 
+                              sourceString.includes("ads") || 
+                              sourceString.includes("cpc") ||
+                              sourceString.includes("google_ads") ||
+                              sourceString.includes("adwords");
+      
       const initialNotes = [
         "Auto-created from CallTrackingMetrics webhook.",
         ctmCallId ? `Call ID: ${ctmCallId}` : null,
@@ -518,6 +527,9 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         callDurationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
         callRecordingUrl,
         ctmSource,
+        // Auto-set referral origin for paid campaigns
+        referralOrigin: isPaidCampaign ? "online" : null,
+        onlineSource: isPaidCampaign ? "google_ppc" : null,
       });
 
       console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber}`);
@@ -557,6 +569,15 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       const referralSource = mapCTMSourceToReferral(sampleData.tracking_source);
       const referralDetails = sampleData.tracking_source;
       
+      // Auto-detect Google PPC from tracking source
+      const sourceString = sampleData.tracking_source.toLowerCase();
+      const isPaidCampaign = sourceString.includes("ppc") || 
+                              sourceString.includes("paid") || 
+                              sourceString.includes("ads") || 
+                              sourceString.includes("cpc") ||
+                              sourceString.includes("google_ads") ||
+                              sourceString.includes("adwords");
+      
       const initialNotes = [
         "TEST: Simulated CTM webhook call.",
         `Call ID: ${sampleData.call_id}`,
@@ -578,6 +599,9 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         callDurationSeconds: parseInt(sampleData.duration, 10),
         callRecordingUrl: sampleData.recording_url,
         ctmSource: sampleData.tracking_source,
+        // Auto-set referral origin for paid campaigns
+        referralOrigin: isPaidCampaign ? "online" : null,
+        onlineSource: isPaidCampaign ? "google_ppc" : null,
       });
 
       console.log(`CTM test webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber}`);
@@ -590,6 +614,127 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     } catch (error) {
       console.error("CTM test webhook error:", error);
       res.status(500).json({ message: "Failed to process test webhook" });
+    }
+  });
+
+  // AI Call Transcription Endpoint
+  // Transcribes call recording and auto-fills inquiry fields
+  app.post("/api/inquiries/:id/transcribe", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
+
+      const inquiry = await storage.getInquiry(id);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+
+      if (!inquiry.callRecordingUrl) {
+        return res.status(400).json({ message: "No call recording URL available for this inquiry" });
+      }
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      // Download the audio file
+      console.log(`Transcribing call recording: ${inquiry.callRecordingUrl}`);
+      const audioResponse = await fetch(inquiry.callRecordingUrl);
+      if (!audioResponse.ok) {
+        return res.status(400).json({ message: "Failed to download call recording" });
+      }
+
+      const audioBuffer = await audioResponse.arrayBuffer();
+      const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
+      const audioFile = new File([audioBlob], "recording.mp3", { type: "audio/mpeg" });
+
+      // Transcribe with Whisper
+      const transcriptionResponse = await openai.audio.transcriptions.create({
+        file: audioFile,
+        model: "whisper-1",
+        response_format: "text",
+      });
+
+      const transcription = transcriptionResponse;
+      console.log(`Transcription completed: ${transcription.substring(0, 200)}...`);
+
+      // Extract data from transcription using GPT
+      const extractionPrompt = `You are an addiction treatment center admissions specialist. Analyze this call transcription and extract key information.
+
+Return a JSON object with these fields (use null if not clearly mentioned):
+{
+  "callerName": "Full name of the caller or person calling on behalf of client",
+  "clientName": "Name of the person seeking treatment (may be same as caller)",
+  "phoneNumber": "Phone number if mentioned",
+  "email": "Email address if mentioned",
+  "insuranceProvider": "Insurance company name",
+  "insurancePolicyId": "Insurance policy or member ID",
+  "presentingIssues": "Brief description of substance use or mental health issues mentioned",
+  "urgency": "low", "medium", or "high" based on crisis indicators,
+  "callSummary": "2-3 sentence professional summary of the call suitable for clinical staff"
+}
+
+Transcription:
+${transcription}`;
+
+      const extractionResponse = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: extractionPrompt }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const extractedContent = extractionResponse.choices[0]?.message?.content;
+      if (!extractedContent) {
+        return res.status(500).json({ message: "Failed to extract data from transcription" });
+      }
+
+      const extractedData = JSON.parse(extractedContent);
+      console.log("Extracted data:", extractedData);
+
+      // Update inquiry with transcription and extracted data
+      const updateData: any = {
+        transcription,
+        aiExtractedData: extractedData,
+        callSummary: extractedData.callSummary || null,
+      };
+
+      // Only update fields that are currently empty and have extracted values
+      if (!inquiry.callerName && extractedData.callerName) {
+        updateData.callerName = extractedData.callerName;
+      }
+      if (!inquiry.clientName && extractedData.clientName) {
+        updateData.clientName = extractedData.clientName;
+      }
+      if (!inquiry.email && extractedData.email) {
+        updateData.email = extractedData.email;
+      }
+      if (!inquiry.insuranceProvider && extractedData.insuranceProvider) {
+        updateData.insuranceProvider = extractedData.insuranceProvider;
+      }
+      if (!inquiry.insurancePolicyId && extractedData.insurancePolicyId) {
+        updateData.insurancePolicyId = extractedData.insurancePolicyId;
+      }
+
+      // Append presenting issues to initial notes if available
+      if (extractedData.presentingIssues) {
+        const existingNotes = inquiry.initialNotes || "";
+        const separator = existingNotes ? "\n\n---\nAI-Extracted Issues: " : "AI-Extracted Issues: ";
+        updateData.initialNotes = existingNotes + separator + extractedData.presentingIssues;
+      }
+
+      const updatedInquiry = await storage.updateInquiry(id, updateData);
+
+      res.json({
+        success: true,
+        message: "Call transcribed and data extracted successfully",
+        transcription,
+        extractedData,
+        updatedFields: Object.keys(updateData),
+      });
+    } catch (error) {
+      console.error("Error transcribing call:", error);
+      res.status(500).json({ message: "Failed to transcribe call recording" });
     }
   });
 
