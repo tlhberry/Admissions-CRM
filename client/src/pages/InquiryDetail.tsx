@@ -377,6 +377,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
             inquiry={inquiry}
             onSubmit={(data) => updateMutation.mutate(data)}
             onAdmit={() => updateMutation.mutate({ actualAdmitDate: new Date().toISOString().split("T")[0], stage: "admitted" })}
+            onLost={() => setShowLostDialog(true)}
             isPending={updateMutation.isPending}
             onCopy={copyToClipboard}
             copied={copied}
@@ -1095,6 +1096,7 @@ function SchedulingForm({
   inquiry,
   onSubmit,
   onAdmit,
+  onLost,
   isPending,
   onCopy,
   copied,
@@ -1102,6 +1104,7 @@ function SchedulingForm({
   inquiry: Inquiry;
   onSubmit: (data: z.infer<typeof schedulingSchema>) => void;
   onAdmit: () => void;
+  onLost: () => void;
   isPending: boolean;
   onCopy: () => void;
   copied: boolean;
@@ -1283,6 +1286,16 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                   Mark as Admitted
                 </Button>
               </div>
+              <Button
+                variant="outline"
+                onClick={onLost}
+                disabled={isPending}
+                className="w-full mt-2 border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
+                data-testid="button-mark-lost"
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                Mark as Lost Client
+              </Button>
             </div>
           </>
         )}

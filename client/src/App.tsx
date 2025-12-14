@@ -12,6 +12,7 @@ import Analytics from "@/pages/Analytics";
 import Search from "@/pages/Search";
 import Settings from "@/pages/Settings";
 import ReferralAccounts from "@/pages/ReferralAccounts";
+import Reports from "@/pages/Reports";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -41,6 +42,7 @@ function Router() {
           <Route path="/search" component={Search} />
           <Route path="/settings" component={Settings} />
           <Route path="/accounts" component={ReferralAccounts} />
+          <Route path="/reports" component={Reports} />
         </>
       )}
       <Route component={NotFound} />

@@ -35,6 +35,8 @@ import {
   PhoneIncoming,
   Settings,
   Building2,
+  FileBarChart,
+  UserX,
 } from "lucide-react";
 import type { Inquiry, PipelineStage } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
@@ -51,6 +53,7 @@ const stageIcons: Record<PipelineStage, typeof Phone> = {
   scheduled: Calendar,
   admitted: UserCheck,
   non_viable: XCircle,
+  lost: UserX,
 };
 
 const stageColors: Record<PipelineStage, string> = {
@@ -62,6 +65,7 @@ const stageColors: Record<PipelineStage, string> = {
   scheduled: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
   admitted: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
   non_viable: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
+  lost: "bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300",
 };
 
 export default function Dashboard() {
@@ -180,6 +184,16 @@ export default function Dashboard() {
             <Button 
               variant="outline"
               size="icon"
+              onClick={() => navigate("/reports")}
+              data-testid="button-reports"
+              title="Reports"
+            >
+              <FileBarChart className="w-5 h-5" />
+            </Button>
+            
+            <Button 
+              variant="outline"
+              size="icon"
               onClick={() => testCTMWebhook.mutate()}
               disabled={testCTMWebhook.isPending}
               data-testid="button-test-ctm"
@@ -210,6 +224,10 @@ export default function Dashboard() {
                 <DropdownMenuItem onClick={() => navigate("/accounts")} className="cursor-pointer" data-testid="menu-accounts">
                   <Building2 className="w-4 h-4 mr-2" />
                   Referral Accounts
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/reports")} className="cursor-pointer" data-testid="menu-reports">
+                  <FileBarChart className="w-4 h-4 mr-2" />
+                  Reports
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer" data-testid="menu-settings">
                   <Settings className="w-4 h-4 mr-2" />
