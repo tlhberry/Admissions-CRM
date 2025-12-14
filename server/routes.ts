@@ -1,7 +1,17 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, logAudit, type InquiryFilters } from "./storage";
-import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { 
+  setupAuth, 
+  isAuthenticated, 
+  isAdmin,
+  requirePermission,
+  canAccessInquiries,
+  canAccessReferralAccounts,
+  canAccessActivities,
+  canAccessReports,
+  canAccessPreAssessment,
+} from "./replitAuth";
 import authRoutes from "./auth/authRoutes";
 import { 
   insertInquirySchema, 
@@ -449,8 +459,8 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
-  // Inquiry routes
-  app.get("/api/inquiries", isAuthenticated, async (req: any, res) => {
+  // Inquiry routes - protected by RBAC
+  app.get("/api/inquiries", isAuthenticated, canAccessInquiries, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -464,7 +474,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   });
 
   // Search/filter inquiries
-  app.get("/api/inquiries/search", isAuthenticated, async (req: any, res) => {
+  app.get("/api/inquiries/search", isAuthenticated, canAccessInquiries, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -486,7 +496,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
-  app.get("/api/inquiries/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/inquiries/:id", isAuthenticated, canAccessInquiries, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -508,7 +518,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
-  app.post("/api/inquiries", isAuthenticated, async (req: any, res) => {
+  app.post("/api/inquiries", isAuthenticated, canAccessInquiries, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -538,7 +548,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
-  app.patch("/api/inquiries/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/inquiries/:id", isAuthenticated, canAccessInquiries, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -585,7 +595,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
-  app.delete("/api/inquiries/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/inquiries/:id", isAuthenticated, canAccessInquiries, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1198,7 +1208,8 @@ ${transcription}`;
   });
 
   // Referral Account routes
-  app.get("/api/referral-accounts", isAuthenticated, async (req: any, res) => {
+  // Referral account routes - protected by RBAC
+  app.get("/api/referral-accounts", isAuthenticated, canAccessReferralAccounts, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1211,7 +1222,7 @@ ${transcription}`;
     }
   });
 
-  app.post("/api/referral-accounts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/referral-accounts", isAuthenticated, canAccessReferralAccounts, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1233,7 +1244,7 @@ ${transcription}`;
     }
   });
 
-  app.get("/api/referral-accounts/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/referral-accounts/:id", isAuthenticated, canAccessReferralAccounts, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1249,7 +1260,7 @@ ${transcription}`;
     }
   });
 
-  app.patch("/api/referral-accounts/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/referral-accounts/:id", isAuthenticated, canAccessReferralAccounts, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1265,7 +1276,7 @@ ${transcription}`;
     }
   });
 
-  app.delete("/api/referral-accounts/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/referral-accounts/:id", isAuthenticated, canAccessReferralAccounts, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1280,8 +1291,8 @@ ${transcription}`;
     }
   });
 
-  // Referral Contact routes
-  app.get("/api/referral-accounts/:id/contacts", isAuthenticated, async (req, res) => {
+  // Referral Contact routes - protected by RBAC
+  app.get("/api/referral-accounts/:id/contacts", isAuthenticated, canAccessReferralAccounts, async (req, res) => {
     try {
       const accountId = parseInt(req.params.id);
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
@@ -1293,7 +1304,7 @@ ${transcription}`;
     }
   });
 
-  app.post("/api/referral-accounts/:id/contacts", isAuthenticated, async (req, res) => {
+  app.post("/api/referral-accounts/:id/contacts", isAuthenticated, canAccessReferralAccounts, async (req, res) => {
     try {
       const accountId = parseInt(req.params.id);
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
@@ -1312,7 +1323,7 @@ ${transcription}`;
     }
   });
 
-  app.patch("/api/referral-contacts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/referral-contacts/:id", isAuthenticated, canAccessReferralAccounts, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid contact ID" });
@@ -1325,7 +1336,7 @@ ${transcription}`;
     }
   });
 
-  app.delete("/api/referral-contacts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/referral-contacts/:id", isAuthenticated, canAccessReferralAccounts, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid contact ID" });
@@ -1338,7 +1349,8 @@ ${transcription}`;
   });
 
   // Activity Log routes
-  app.get("/api/referral-accounts/:id/activities", isAuthenticated, async (req: any, res) => {
+  // Activity routes - protected by RBAC
+  app.get("/api/referral-accounts/:id/activities", isAuthenticated, canAccessActivities, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1353,7 +1365,7 @@ ${transcription}`;
     }
   });
 
-  app.post("/api/referral-accounts/:id/activities", isAuthenticated, async (req: any, res) => {
+  app.post("/api/referral-accounts/:id/activities", isAuthenticated, canAccessActivities, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1379,7 +1391,7 @@ ${transcription}`;
     }
   });
 
-  app.get("/api/activities", isAuthenticated, async (req: any, res) => {
+  app.get("/api/activities", isAuthenticated, canAccessActivities, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
@@ -1429,7 +1441,8 @@ ${transcription}`;
 
   // Pre-Assessment Form Routes
   // Pre-Cert Form
-  app.get("/api/inquiries/:id/pre-cert-form", isAuthenticated, async (req, res) => {
+  // Pre-assessment forms - protected by RBAC
+  app.get("/api/inquiries/:id/pre-cert-form", isAuthenticated, canAccessPreAssessment, async (req, res) => {
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
@@ -1465,7 +1478,7 @@ ${transcription}`;
   });
 
   // Nursing Assessment Form
-  app.get("/api/inquiries/:id/nursing-assessment", isAuthenticated, async (req, res) => {
+  app.get("/api/inquiries/:id/nursing-assessment", isAuthenticated, canAccessPreAssessment, async (req, res) => {
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
@@ -1501,7 +1514,7 @@ ${transcription}`;
   });
 
   // Pre-Screening Form
-  app.get("/api/inquiries/:id/pre-screening", isAuthenticated, async (req, res) => {
+  app.get("/api/inquiries/:id/pre-screening", isAuthenticated, canAccessPreAssessment, async (req, res) => {
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
@@ -1537,7 +1550,7 @@ ${transcription}`;
   });
 
   // Forms Status (all three forms completion status)
-  app.get("/api/inquiries/:id/forms-status", isAuthenticated, async (req, res) => {
+  app.get("/api/inquiries/:id/forms-status", isAuthenticated, canAccessPreAssessment, async (req, res) => {
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });

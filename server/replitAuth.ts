@@ -233,3 +233,92 @@ export const isAdmin: RequestHandler = async (req, res, next) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+// Role permissions for RBAC - imported from schema for consistency
+import { rolePermissions, type UserRole } from "@shared/schema";
+
+// Helper to check if a role has a specific permission
+function hasPermission(role: UserRole, permission: string): boolean {
+  const permissions = rolePermissions[role];
+  if (!permissions) return false;
+  // Admin has "all" permission which grants access to everything
+  if (permissions.includes("all")) return true;
+  return permissions.includes(permission);
+}
+
+// Helper to check if request is a read-only operation (GET request)
+function isReadOnlyRequest(method: string): boolean {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
+}
+
+// Factory function to create permission-checking middleware
+// Usage: requirePermission("inquiries") or requirePermission(["inquiries", "reports"])
+// To allow read_only users to view a resource, include "view_only" in the permissions array:
+// e.g., requirePermission(["inquiries", "view_only"]) allows read_only GET access
+export function requirePermission(permission: string | string[]): RequestHandler {
+  return async (req, res, next) => {
+    const user = req.user as any;
+
+    if (!req.isAuthenticated() || !user?.claims?.sub) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const dbUser = await storage.getUser(user.claims.sub);
+      if (!dbUser) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      // Check if user account is active
+      if (dbUser.isActive !== "yes") {
+        return res.status(403).json({ message: "Account is deactivated" });
+      }
+
+      const userRole = dbUser.role as UserRole;
+      const permissions = Array.isArray(permission) ? permission : [permission];
+
+      // CRITICAL: Handle read_only role FIRST before general permission check
+      // This prevents read_only users from getting write access via "view_only" permission match
+      if (userRole === "read_only") {
+        const routeAllowsViewOnly = permissions.includes("view_only");
+        if (routeAllowsViewOnly && isReadOnlyRequest(req.method)) {
+          return next();
+        }
+        // read_only cannot modify anything or access resources that don't allow view_only
+        return res.status(403).json({ 
+          message: "Forbidden: Read-only access does not allow this action" 
+        });
+      }
+
+      // Filter out "view_only" from permissions for role check - it's a marker for read_only handling above
+      const actualPermissions = permissions.filter(p => p !== "view_only");
+      
+      // Check if user has any of the required permissions
+      const hasRequiredPermission = actualPermissions.length === 0 || 
+        actualPermissions.some(p => hasPermission(userRole, p));
+
+      // If user has required permission, allow access
+      if (hasRequiredPermission) {
+        return next();
+      }
+
+      // User doesn't have required permission
+      return res.status(403).json({ 
+        message: `Forbidden: Requires ${actualPermissions.join(" or ")} permission` 
+      });
+    } catch (error) {
+      console.error("Error checking permissions:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  };
+}
+
+// Convenience middleware for common permission checks
+// These include "view_only" to allow read_only users to view data on GET requests
+export const canAccessInquiries = requirePermission(["inquiries", "view_only"]);
+export const canAccessReferralAccounts = requirePermission(["referral_accounts", "view_only"]);
+export const canAccessActivities = requirePermission(["activities", "view_only"]);
+export const canAccessReports = requirePermission(["reports", "view_only"]);
+// Clinical routes - more restricted, no view_only access
+export const canAccessClinicalNotes = requirePermission("clinical_notes");
+export const canAccessPreAssessment = requirePermission(["pre_assessment", "clinical_notes"]);
