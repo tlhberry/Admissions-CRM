@@ -657,6 +657,8 @@ function LostClientDialog({
 }
 
 const insuranceSchema = z.object({
+  callerName: z.string().min(1, "Caller name is required"),
+  clientName: z.string().optional(),
   insuranceProvider: z.string().min(1, "Insurance provider is required"),
   insurancePolicyId: z.string().min(1, "Policy ID is required"),
   dateOfBirth: z.string().min(1, "Date of birth is required"),
@@ -677,6 +679,8 @@ function InsuranceForm({
   const form = useForm({
     resolver: zodResolver(insuranceSchema),
     defaultValues: {
+      callerName: inquiry.callerName || "",
+      clientName: inquiry.clientName || "",
       insuranceProvider: inquiry.insuranceProvider || "",
       insurancePolicyId: inquiry.insurancePolicyId || "",
       dateOfBirth: inquiry.dateOfBirth || "",
@@ -700,6 +704,46 @@ function InsuranceForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="callerName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base">Caller Name *</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="Who called?"
+                        className="text-lg h-12"
+                        data-testid="input-caller-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="clientName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base">Client Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="If different from caller"
+                        className="text-lg h-12"
+                        data-testid="input-client-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
               name="insuranceProvider"
