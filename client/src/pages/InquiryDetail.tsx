@@ -1050,13 +1050,8 @@ function VOBForm({
   onSubmit: (data: z.infer<typeof vobSchema>) => void;
   isPending: boolean;
 }) {
-  const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<{ url: string; filename: string } | null>(
-    inquiry.vobFileUrl ? { url: inquiry.vobFileUrl, filename: "VOB Document" } : null
-  );
   const { toast } = useToast();
-  const fileInputRef = { current: null as HTMLInputElement | null };
 
   const form = useForm({
     resolver: zodResolver(vobSchema),
@@ -1084,36 +1079,6 @@ function VOBForm({
       benefitNotes: inquiry.benefitNotes || "",
     },
   });
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const data = await response.json();
-      setUploadedFile({ url: data.url, filename: data.filename });
-      form.setValue("vobFileUrl", data.url);
-      toast({ title: "File uploaded", description: data.filename });
-    } catch (error) {
-      toast({ title: "Upload failed", description: "Please try again", variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleAnalyzeWithAI = async () => {
     const vobText = form.getValues("vobDetails");
@@ -1185,57 +1150,6 @@ function VOBForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="p-4 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30">
-              <FormLabel className="text-base font-semibold">Upload VOB Document</FormLabel>
-              <p className="text-sm text-muted-foreground mb-3">Upload the VOB file, then paste the text below for AI analysis</p>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="hidden"
-                  id="vob-file-input"
-                  data-testid="input-vob-file"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={() => document.getElementById("vob-file-input")?.click()}
-                  disabled={uploading}
-                  className="w-full sm:w-auto"
-                  data-testid="button-upload-vob"
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="w-5 h-5 mr-2" />
-                      Choose File
-                    </>
-                  )}
-                </Button>
-                {uploadedFile && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-primary" />
-                    <a 
-                      href={uploadedFile.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="hover:underline text-primary font-medium"
-                      data-testid="link-vob-file"
-                    >
-                      {uploadedFile.filename}
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-
             <FormField
               control={form.control}
               name="vobDetails"
