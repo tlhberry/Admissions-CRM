@@ -24,9 +24,24 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User roles
-export const userRoles = ["admin", "user"] as const;
+// User roles - HIPAA compliant role-based access control
+export const userRoles = ["admin", "admissions", "clinical", "read_only"] as const;
 export type UserRole = typeof userRoles[number];
+
+export const userRoleDisplayNames: Record<UserRole, string> = {
+  admin: "Administrator",
+  admissions: "Admissions Staff",
+  clinical: "Clinical Staff",
+  read_only: "Read Only",
+};
+
+// Role permissions for RBAC
+export const rolePermissions: Record<UserRole, string[]> = {
+  admin: ["all"],
+  admissions: ["inquiries", "referral_accounts", "activities", "reports"],
+  clinical: ["inquiries", "clinical_notes", "pre_assessment"],
+  read_only: ["view_only"],
+};
 
 // Companies/Tenants table
 export const companies = pgTable("companies", {
@@ -59,22 +74,75 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 
-// User storage table for Replit Auth
+// User storage table with HIPAA-compliant authentication fields
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   companyId: integer("company_id").references(() => companies.id),
-  role: varchar("role", { length: 20 }).notNull().default("user"),
+  role: varchar("role", { length: 20 }).notNull().default("admissions"),
   isActive: varchar("is_active", { length: 10 }).notNull().default("yes"),
+  
+  // Password authentication fields
+  passwordHash: varchar("password_hash", { length: 255 }),
+  passwordChangedAt: timestamp("password_changed_at"),
+  passwordExpiresAt: timestamp("password_expires_at"),
+  mustChangePassword: varchar("must_change_password", { length: 10 }).default("yes"),
+  
+  // Two-Factor Authentication fields
+  totpSecret: varchar("totp_secret", { length: 255 }), // Encrypted TOTP secret
+  totpEnabled: varchar("totp_enabled", { length: 10 }).default("no"),
+  smsPhoneNumber: varchar("sms_phone_number", { length: 20 }),
+  sms2faEnabled: varchar("sms_2fa_enabled", { length: 10 }).default("no"),
+  twoFactorSetupComplete: varchar("two_factor_setup_complete", { length: 10 }).default("no"),
+  
+  // Account lockout fields
+  failedLoginAttempts: integer("failed_login_attempts").default(0),
+  lockedAt: timestamp("locked_at"),
+  lockedReason: varchar("locked_reason", { length: 255 }),
+  lockedBy: varchar("locked_by"), // Admin who locked the account
+  
+  // Last activity tracking
+  lastLoginAt: timestamp("last_login_at"),
+  lastActivityAt: timestamp("last_activity_at"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// Password history table - stores hashes of last 5 passwords to prevent reuse
+export const passwordHistory = pgTable("password_history", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_password_history_user").on(table.userId),
+]);
+
+export type PasswordHistory = typeof passwordHistory.$inferSelect;
+
+// Login attempts table - for tracking and auditing login attempts
+export const loginAttempts = pgTable("login_attempts", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  userId: varchar("user_id"),
+  success: varchar("success", { length: 10 }).notNull(), // yes/no
+  failureReason: varchar("failure_reason", { length: 100 }),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+  twoFactorMethod: varchar("two_factor_method", { length: 20 }), // totp/sms/none
+  twoFactorSuccess: varchar("two_factor_success", { length: 10 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_login_attempts_email").on(table.email),
+  index("IDX_login_attempts_created").on(table.createdAt),
+]);
 
 // Pipeline stages enum (inquiry goes directly to vob_pending)
 export const pipelineStages = [
