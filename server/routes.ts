@@ -135,7 +135,6 @@ Return a JSON object with these fields (use null if not found, use dollar amount
           { role: "user", content: `Please analyze this VOB document:\n\n${vobText}` }
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 2000,
       });
 
       const content = response.choices[0]?.message?.content;
