@@ -5,6 +5,9 @@ import {
   referralContacts,
   activityLogs,
   notificationSettings,
+  preCertForms,
+  nursingAssessmentForms,
+  preScreeningForms,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -18,6 +21,12 @@ import {
   type InsertActivityLog,
   type NotificationSetting,
   type InsertNotificationSetting,
+  type PreCertForm,
+  type InsertPreCertForm,
+  type NursingAssessmentForm,
+  type InsertNursingAssessmentForm,
+  type PreScreeningForm,
+  type InsertPreScreeningForm,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL } from "drizzle-orm";
@@ -71,6 +80,15 @@ export interface IStorage {
   getNotificationSettings(): Promise<NotificationSetting[]>;
   getNotificationSettingByStage(stageName: string): Promise<NotificationSetting | undefined>;
   upsertNotificationSetting(data: InsertNotificationSetting): Promise<NotificationSetting>;
+  
+  // Pre-Assessment Form operations
+  getPreCertForm(inquiryId: number): Promise<PreCertForm | undefined>;
+  upsertPreCertForm(data: InsertPreCertForm): Promise<PreCertForm>;
+  getNursingAssessmentForm(inquiryId: number): Promise<NursingAssessmentForm | undefined>;
+  upsertNursingAssessmentForm(data: InsertNursingAssessmentForm): Promise<NursingAssessmentForm>;
+  getPreScreeningForm(inquiryId: number): Promise<PreScreeningForm | undefined>;
+  upsertPreScreeningForm(data: InsertPreScreeningForm): Promise<PreScreeningForm>;
+  getFormsStatus(inquiryId: number): Promise<{ preCert: boolean; nursing: boolean; preScreening: boolean }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -301,6 +319,68 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return setting;
+  }
+
+  // Pre-Assessment Form operations
+  async getPreCertForm(inquiryId: number): Promise<PreCertForm | undefined> {
+    const [form] = await db.select().from(preCertForms).where(eq(preCertForms.inquiryId, inquiryId));
+    return form;
+  }
+
+  async upsertPreCertForm(data: InsertPreCertForm): Promise<PreCertForm> {
+    const [form] = await db.insert(preCertForms)
+      .values(data)
+      .onConflictDoUpdate({
+        target: preCertForms.inquiryId,
+        set: { formData: data.formData, isComplete: data.isComplete, completedAt: data.completedAt, completedBy: data.completedBy, updatedAt: new Date() },
+      })
+      .returning();
+    return form;
+  }
+
+  async getNursingAssessmentForm(inquiryId: number): Promise<NursingAssessmentForm | undefined> {
+    const [form] = await db.select().from(nursingAssessmentForms).where(eq(nursingAssessmentForms.inquiryId, inquiryId));
+    return form;
+  }
+
+  async upsertNursingAssessmentForm(data: InsertNursingAssessmentForm): Promise<NursingAssessmentForm> {
+    const [form] = await db.insert(nursingAssessmentForms)
+      .values(data)
+      .onConflictDoUpdate({
+        target: nursingAssessmentForms.inquiryId,
+        set: { formData: data.formData, isComplete: data.isComplete, completedAt: data.completedAt, completedBy: data.completedBy, updatedAt: new Date() },
+      })
+      .returning();
+    return form;
+  }
+
+  async getPreScreeningForm(inquiryId: number): Promise<PreScreeningForm | undefined> {
+    const [form] = await db.select().from(preScreeningForms).where(eq(preScreeningForms.inquiryId, inquiryId));
+    return form;
+  }
+
+  async upsertPreScreeningForm(data: InsertPreScreeningForm): Promise<PreScreeningForm> {
+    const [form] = await db.insert(preScreeningForms)
+      .values(data)
+      .onConflictDoUpdate({
+        target: preScreeningForms.inquiryId,
+        set: { formData: data.formData, isComplete: data.isComplete, completedAt: data.completedAt, completedBy: data.completedBy, updatedAt: new Date() },
+      })
+      .returning();
+    return form;
+  }
+
+  async getFormsStatus(inquiryId: number): Promise<{ preCert: boolean; nursing: boolean; preScreening: boolean }> {
+    const [preCert, nursing, preScreening] = await Promise.all([
+      this.getPreCertForm(inquiryId),
+      this.getNursingAssessmentForm(inquiryId),
+      this.getPreScreeningForm(inquiryId),
+    ]);
+    return {
+      preCert: preCert?.isComplete === "yes",
+      nursing: nursing?.isComplete === "yes",
+      preScreening: preScreening?.isComplete === "yes",
+    };
   }
 }
 

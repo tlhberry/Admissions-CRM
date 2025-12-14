@@ -11,6 +11,9 @@ import {
   insertReferralContactSchema,
   insertActivityLogSchema,
   insertNotificationSettingSchema,
+  insertPreCertFormSchema,
+  insertNursingAssessmentFormSchema,
+  insertPreScreeningFormSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { emailService } from "./emailService";
@@ -640,6 +643,128 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to save notification setting" });
+    }
+  });
+
+  // Pre-Assessment Form Routes
+  // Pre-Cert Form
+  app.get("/api/inquiries/:id/pre-cert-form", isAuthenticated, async (req, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const form = await storage.getPreCertForm(inquiryId);
+      res.json(form || null);
+    } catch (error) {
+      console.error("Error fetching pre-cert form:", error);
+      res.status(500).json({ message: "Failed to fetch pre-cert form" });
+    }
+  });
+
+  app.put("/api/inquiries/:id/pre-cert-form", isAuthenticated, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const userId = req.user.claims.sub;
+      const validatedData = insertPreCertFormSchema.parse({
+        inquiryId,
+        formData: req.body.formData || {},
+        isComplete: req.body.isComplete || "no",
+        completedAt: req.body.isComplete === "yes" ? new Date() : null,
+        completedBy: req.body.isComplete === "yes" ? userId : null,
+      });
+      const form = await storage.upsertPreCertForm(validatedData);
+      res.json(form);
+    } catch (error) {
+      console.error("Error saving pre-cert form:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to save pre-cert form" });
+    }
+  });
+
+  // Nursing Assessment Form
+  app.get("/api/inquiries/:id/nursing-assessment", isAuthenticated, async (req, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const form = await storage.getNursingAssessmentForm(inquiryId);
+      res.json(form || null);
+    } catch (error) {
+      console.error("Error fetching nursing assessment form:", error);
+      res.status(500).json({ message: "Failed to fetch nursing assessment form" });
+    }
+  });
+
+  app.put("/api/inquiries/:id/nursing-assessment", isAuthenticated, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const userId = req.user.claims.sub;
+      const validatedData = insertNursingAssessmentFormSchema.parse({
+        inquiryId,
+        formData: req.body.formData || {},
+        isComplete: req.body.isComplete || "no",
+        completedAt: req.body.isComplete === "yes" ? new Date() : null,
+        completedBy: req.body.isComplete === "yes" ? userId : null,
+      });
+      const form = await storage.upsertNursingAssessmentForm(validatedData);
+      res.json(form);
+    } catch (error) {
+      console.error("Error saving nursing assessment form:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to save nursing assessment form" });
+    }
+  });
+
+  // Pre-Screening Form
+  app.get("/api/inquiries/:id/pre-screening", isAuthenticated, async (req, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const form = await storage.getPreScreeningForm(inquiryId);
+      res.json(form || null);
+    } catch (error) {
+      console.error("Error fetching pre-screening form:", error);
+      res.status(500).json({ message: "Failed to fetch pre-screening form" });
+    }
+  });
+
+  app.put("/api/inquiries/:id/pre-screening", isAuthenticated, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const userId = req.user.claims.sub;
+      const validatedData = insertPreScreeningFormSchema.parse({
+        inquiryId,
+        formData: req.body.formData || {},
+        isComplete: req.body.isComplete || "no",
+        completedAt: req.body.isComplete === "yes" ? new Date() : null,
+        completedBy: req.body.isComplete === "yes" ? userId : null,
+      });
+      const form = await storage.upsertPreScreeningForm(validatedData);
+      res.json(form);
+    } catch (error) {
+      console.error("Error saving pre-screening form:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to save pre-screening form" });
+    }
+  });
+
+  // Forms Status (all three forms completion status)
+  app.get("/api/inquiries/:id/forms-status", isAuthenticated, async (req, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      const status = await storage.getFormsStatus(inquiryId);
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching forms status:", error);
+      res.status(500).json({ message: "Failed to fetch forms status" });
     }
   });
 
