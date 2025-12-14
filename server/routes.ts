@@ -374,10 +374,17 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         });
       }
       
-      // Get pre-assessment forms
+      // Get pre-assessment forms and strip metadata/sensitive fields
       const preCertForm = await storage.getPreCertForm(id);
       const nursingForm = await storage.getNursingAssessmentForm(id);
       const preScreeningForm = await storage.getPreScreeningForm(id);
+      
+      // Helper to extract only form content (remove DB metadata)
+      const extractFormContent = (form: any) => {
+        if (!form) return undefined;
+        const { id: formId, inquiryId, createdAt, updatedAt, ...formContent } = form;
+        return formContent;
+      };
       
       // Format DOB
       let dobFormatted: string | undefined;
@@ -398,9 +405,9 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         insurancePolicyId: inquiry.insurancePolicyId || undefined,
         schedulingNotes: inquiry.schedulingNotes || undefined,
       }, {
-        preCert: preCertForm || undefined,
-        nursing: nursingForm || undefined,
-        preScreening: preScreeningForm || undefined,
+        preCert: extractFormContent(preCertForm),
+        nursing: extractFormContent(nursingForm),
+        preScreening: extractFormContent(preScreeningForm),
       }, staffEmails);
       
       res.json({ 

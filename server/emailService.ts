@@ -222,6 +222,15 @@ export interface PreAssessmentFormData {
   preScreening?: any;
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 class EmailServiceExtended extends EmailService {
   async sendClientArrivalNotification(
     data: ClientArrivalData,
@@ -315,7 +324,7 @@ This notification was sent from AdmitSimple CRM.
       ${data.schedulingNotes ? `
       <div class="special-needs">
         <span class="label">Special Needs/Requirements:</span><br/>
-        <span class="value">${data.schedulingNotes}</span>
+        <span class="value">${escapeHtml(data.schedulingNotes)}</span>
       </div>
       ` : ""}
       <div class="footer">
