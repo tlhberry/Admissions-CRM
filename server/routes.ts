@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage, type InquiryFilters } from "./storage";
+import { storage, logAudit, type InquiryFilters } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { 
   insertInquirySchema, 
@@ -477,6 +477,10 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       });
 
       const inquiry = await storage.createInquiry(validatedData);
+      
+      // Audit log for PHI creation
+      await logAudit(companyId, userId, "create", "inquiry", inquiry.id, "Inquiry created", req);
+      
       res.status(201).json(inquiry);
     } catch (error) {
       console.error("Error creating inquiry:", error);
@@ -519,6 +523,11 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         return res.status(404).json({ message: "Inquiry not found" });
       }
 
+      // Audit log for PHI update
+      const userId = req.user?.claims?.sub;
+      const changedFields = Object.keys(req.body).join(", ");
+      await logAudit(companyId, userId, "update", "inquiry", id, `Fields updated: ${changedFields}`, req);
+
       res.json(inquiry);
     } catch (error) {
       console.error("Error updating inquiry:", error);
@@ -541,6 +550,10 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid inquiry ID" });
       }
+
+      // Audit log for PHI deletion (log BEFORE deleting)
+      const userId = req.user?.claims?.sub;
+      await logAudit(companyId, userId, "delete", "inquiry", id, "Inquiry deleted", req);
 
       await storage.deleteInquiry(id, companyId);
       res.status(204).send();
@@ -1288,7 +1301,7 @@ ${transcription}`;
       
       const accountId = parseInt(req.params.id);
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
-      const activities = await storage.getActivityLogsByAccount(accountId, companyId);
+      const activities = await storage.getActivityLogsByAccount(accountId);
       res.json(activities);
     } catch (error) {
       console.error("Error fetching activities:", error);

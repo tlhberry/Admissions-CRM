@@ -1,0 +1,76 @@
+SECURITY + HIPAA HARDENING PROMPT (DO NOT CHANGE APP FEATURES)
+
+Goal:
+Harden this existing admissions CRM without changing business logic, workflows, pipeline stages, or UI flows, except where required for security. Do not add new features. Only implement security controls, compliance guardrails, and configuration best practices.
+
+IMPORTANT:
+- Do NOT store passwords, API keys, database URLs, encryption keys, or admin credentials in code.
+- Use Replit Secrets / environment variables for all secrets.
+- Assume app contains sensitive healthcare information. Apply HIPAA-grade safeguards.
+
+1) Authentication and Password Security
+- Use a standard auth library (do not hand-roll crypto).
+- Store password hashes with Argon2id (preferred) or bcrypt with strong cost.
+- Enforce strong passwords and rate limits.
+- Implement account lockout / progressive delay after failed logins.
+- Implement secure session management:
+  - HttpOnly, Secure cookies
+  - SameSite=Lax or Strict
+  - Session rotation on login
+  - Logout invalidates session
+- Add MFA option (optional) if easy, but do not disrupt workflows.
+
+2) Authorization (NO backdoors)
+- Implement strict role-based access control (Admin, User).
+- Enforce tenant isolation at the database query layer:
+  - Every query MUST filter by companyId from the authenticated session.
+- Build automated tests that prove:
+  - A user from Company A cannot access Company B data (API and UI).
+  - No “admin override” or hidden endpoints exist.
+- Remove any debug endpoints, public database consoles, or “temporary” routes.
+- Ensure all endpoints require auth by default.
+
+3) Database + Data Loss Prevention
+- Never expose database credentials to client code.
+- Use least-privilege database user (no superuser).
+- Enable daily backups + point-in-time restore (if supported by DB provider).
+- Add a production-safe migration strategy.
+- Add soft-delete or recovery for critical records to prevent accidental wipe.
+- Add audit logging for create/update/delete of patient records (timestamp, userId, action).
+
+4) Transport + App Security
+- Force HTTPS.
+- Add security headers:
+  - Content-Security-Policy (reasonable default)
+  - X-Frame-Options / frame-ancestors
+  - X-Content-Type-Options
+  - Referrer-Policy
+- Validate and sanitize all user inputs server-side.
+- Protect against common attacks:
+  - SQL injection (parameterized queries/ORM)
+  - XSS (output encoding)
+  - CSRF (token or same-site strategy)
+  - SSRF (block internal IP ranges)
+- Add request rate limiting per IP and per account.
+- Log security events (failed logins, permission denials, unusual activity).
+
+5) Secrets Handling (Replit)
+- Move all secrets into Replit Secrets (env vars).
+- Add a boot-time check that refuses to start if required env vars are missing.
+
+6) HIPAA Guardrails (Practical Reality)
+- Add a “PHI boundary” rule:
+  - Do not store PHI in logs.
+  - Redact PHI from error messages.
+  - Disable verbose logging in production.
+- If true HIPAA compliance is required:
+  - Store PHI in a HIPAA-compliant backend that signs a BAA.
+  - Keep Replit app as UI only, with PHI requests routed securely to the HIPAA backend.
+  - Only store non-PHI metadata in Replit (like status flags, timestamps, internal IDs).
+Provide a clear checklist of what data is PHI and where it is stored.
+
+Deliverables:
+- A security report of what was fixed
+- A list of remaining risks
+- Confirmation that no secrets are in code
+- Tests verifying tenant isolation and RBAC

@@ -551,3 +551,30 @@ export const insertPreScreeningFormSchema = createInsertSchema(preScreeningForms
 
 export type PreScreeningForm = typeof preScreeningForms.$inferSelect;
 export type InsertPreScreeningForm = z.infer<typeof insertPreScreeningFormSchema>;
+
+// Audit log table for HIPAA compliance - tracks PHI access and modifications
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  userId: varchar("user_id").references(() => users.id),
+  action: varchar("action", { length: 50 }).notNull(), // create, update, delete, view
+  resourceType: varchar("resource_type", { length: 50 }).notNull(), // inquiry, referral_account, etc
+  resourceId: integer("resource_id"), // ID of the affected record
+  details: text("details"), // Additional context (sanitized, no PHI)
+  ipAddress: varchar("ip_address", { length: 45 }), // IPv4 or IPv6
+  userAgent: varchar("user_agent", { length: 500 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_audit_company").on(table.companyId),
+  index("IDX_audit_user").on(table.userId),
+  index("IDX_audit_resource").on(table.resourceType, table.resourceId),
+  index("IDX_audit_created").on(table.createdAt),
+]);
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

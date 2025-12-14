@@ -35,6 +35,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: true,
+      sameSite: "lax",
       maxAge: sessionTtl,
     },
   });
@@ -141,20 +142,35 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/callback", (req, res, next) => {
     ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    passport.authenticate(`replitauth:${req.hostname}`, (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) return res.redirect("/api/login");
+      
+      // Regenerate session on login for security (prevents session fixation)
+      req.session.regenerate((regenerateErr) => {
+        if (regenerateErr) return next(regenerateErr);
+        
+        req.login(user, (loginErr) => {
+          if (loginErr) return next(loginErr);
+          res.redirect("/");
+        });
+      });
     })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+    const logoutUrl = client.buildEndSessionUrl(config, {
+      client_id: process.env.REPL_ID!,
+      post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+    }).href;
+    
+    // Destroy session completely on logout
+    req.session.destroy((err) => {
+      if (err) console.error("Session destruction error:", err);
+      req.logout(() => {
+        res.clearCookie("connect.sid");
+        res.redirect(logoutUrl);
+      });
     });
   });
 }

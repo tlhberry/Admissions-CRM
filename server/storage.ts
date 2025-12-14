@@ -9,6 +9,7 @@ import {
   nursingAssessmentForms,
   preScreeningForms,
   companies,
+  auditLogs,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -30,6 +31,8 @@ import {
   type InsertPreScreeningForm,
   type Company,
   type InsertCompany,
+  type AuditLog,
+  type InsertAuditLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL } from "drizzle-orm";
@@ -99,6 +102,10 @@ export interface IStorage {
   getPreScreeningForm(inquiryId: number): Promise<PreScreeningForm | undefined>;
   upsertPreScreeningForm(data: InsertPreScreeningForm): Promise<PreScreeningForm>;
   getFormsStatus(inquiryId: number): Promise<{ preCert: boolean; nursing: boolean; preScreening: boolean }>;
+  
+  // Audit log operations (HIPAA compliance)
+  createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(companyId: number, limit?: number): Promise<AuditLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -443,6 +450,46 @@ export class DatabaseStorage implements IStorage {
       nursing: nursing?.isComplete === "yes",
       preScreening: preScreening?.isComplete === "yes",
     };
+  }
+
+  // Audit log operations (HIPAA compliance)
+  async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
+    const [log] = await db.insert(auditLogs).values(data).returning();
+    return log;
+  }
+
+  async getAuditLogs(companyId: number, limit = 100): Promise<AuditLog[]> {
+    return await db.select().from(auditLogs)
+      .where(eq(auditLogs.companyId, companyId))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+  }
+}
+
+// Helper function to log audit events (call this from routes)
+export async function logAudit(
+  companyId: number,
+  userId: string | null,
+  action: "create" | "update" | "delete" | "view",
+  resourceType: string,
+  resourceId: number | null,
+  details?: string,
+  req?: { ip?: string; headers?: { "user-agent"?: string } }
+): Promise<void> {
+  try {
+    await storage.createAuditLog({
+      companyId,
+      userId,
+      action,
+      resourceType,
+      resourceId,
+      details,
+      ipAddress: req?.ip || null,
+      userAgent: req?.headers?.["user-agent"]?.substring(0, 500) || null,
+    });
+  } catch (error) {
+    // Don't fail the main operation if audit logging fails
+    console.error("Failed to create audit log:", error);
   }
 }
 
