@@ -150,6 +150,19 @@ export default function InquiryDetail() {
     },
   });
 
+  const sendArrivalEmailMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/inquiries/${id}/send-arrival-email`);
+      return res.json();
+    },
+    onSuccess: (data: { message?: string }) => {
+      toast({ title: "Email Sent", description: data.message || "Client arrival email sent successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to send email", variant: "destructive" });
+    },
+  });
+
   const handleNonViable = (reason: NonViableReason, notes: string) => {
     updateMutation.mutate({
       isViable: "no",
@@ -587,24 +600,43 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               <div className="p-4 rounded-lg bg-muted/50 font-mono text-sm whitespace-pre-wrap">
                 {generateAdmissionSummary()}
               </div>
-              <Button
-                variant="outline"
-                className="mt-4 w-full sm:w-auto"
-                onClick={copyToClipboard}
-                data-testid="button-copy-summary"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy Summary
-                  </>
-                )}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => sendArrivalEmailMutation.mutate()}
+                  disabled={sendArrivalEmailMutation.isPending}
+                  data-testid="button-send-arrival-email"
+                >
+                  {sendArrivalEmailMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4 h-4 mr-2" />
+                      Send Client Arrived Email
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={copyToClipboard}
+                  data-testid="button-copy-summary"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Summary
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

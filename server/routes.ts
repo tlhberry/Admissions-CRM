@@ -342,6 +342,78 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
+  // Send client arrival email with pre-assessment forms attached
+  app.post("/api/inquiries/:id/send-arrival-email", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const inquiry = await storage.getInquiry(id);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      // Get notification settings for admitted stage
+      const notificationSettings = await storage.getNotificationSettings();
+      const admittedSetting = notificationSettings.find(s => s.stageName === "admitted");
+      
+      let staffEmails: string[] = [];
+      if (admittedSetting?.enabled === "yes" && admittedSetting.emailAddresses) {
+        staffEmails = admittedSetting.emailAddresses
+          .split(",")
+          .map(e => e.trim())
+          .filter(e => e.length > 0 && e.includes("@"));
+      }
+      
+      // Fall back to NOTIFICATION_EMAIL
+      if (staffEmails.length === 0 && process.env.NOTIFICATION_EMAIL) {
+        staffEmails = [process.env.NOTIFICATION_EMAIL];
+      }
+      
+      if (staffEmails.length === 0) {
+        return res.status(400).json({ 
+          message: "No email addresses configured. Go to Settings to add emails for the 'admitted' stage." 
+        });
+      }
+      
+      // Get pre-assessment forms
+      const preCertForm = await storage.getPreCertForm(id);
+      const nursingForm = await storage.getNursingAssessmentForm(id);
+      const preScreeningForm = await storage.getPreScreeningForm(id);
+      
+      // Format DOB
+      let dobFormatted: string | undefined;
+      if (inquiry.dateOfBirth) {
+        const dob = new Date(inquiry.dateOfBirth);
+        dobFormatted = `${(dob.getMonth() + 1).toString().padStart(2, '0')}/${dob.getDate().toString().padStart(2, '0')}/${dob.getFullYear()}`;
+      }
+      
+      const sent = await emailService.sendClientArrivalNotification({
+        clientName: inquiry.clientName || inquiry.callerName || "Unknown Client",
+        dateOfBirth: dobFormatted,
+        expectedAdmitDate: inquiry.expectedAdmitDate || "Not set",
+        actualAdmitDate: inquiry.actualAdmitDate || undefined,
+        levelOfCare: inquiry.levelOfCare 
+          ? levelOfCareDisplayNames[inquiry.levelOfCare as LevelOfCare] || inquiry.levelOfCare 
+          : "Not specified",
+        insuranceProvider: inquiry.insuranceProvider || undefined,
+        insurancePolicyId: inquiry.insurancePolicyId || undefined,
+        schedulingNotes: inquiry.schedulingNotes || undefined,
+      }, {
+        preCert: preCertForm || undefined,
+        nursing: nursingForm || undefined,
+        preScreening: preScreeningForm || undefined,
+      }, staffEmails);
+      
+      res.json({ 
+        success: sent, 
+        recipientCount: staffEmails.length,
+        message: sent ? `Arrival notification sent to ${staffEmails.length} recipient(s)` : "Email service not configured"
+      });
+    } catch (error) {
+      console.error("Error sending arrival notification:", error);
+      res.status(500).json({ message: "Failed to send arrival notification" });
+    }
+  });
+
   // CallTrackingMetrics Webhook Endpoint
   // This endpoint receives incoming call data from CallTrackingMetrics
   // 
