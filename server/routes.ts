@@ -251,36 +251,6 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         return res.status(404).json({ message: "Inquiry not found" });
       }
 
-      // Send email notification when inquiry is scheduled
-      if (validatedData.stage === "scheduled" && currentInquiry?.stage !== "scheduled") {
-        // Get notification settings for the scheduled stage
-        const notificationSettings = await storage.getNotificationSettings();
-        const scheduledSetting = notificationSettings.find(s => s.stageName === "scheduled");
-        
-        // Parse email addresses from settings (comma-separated)
-        let staffEmails: string[] = [];
-        if (scheduledSetting?.enabled === "yes" && scheduledSetting.emailAddresses) {
-          staffEmails = scheduledSetting.emailAddresses
-            .split(",")
-            .map(e => e.trim())
-            .filter(e => e.length > 0 && e.includes("@"));
-        }
-        
-        // Non-blocking email send to all staff
-        emailService.sendAdmissionScheduledNotification({
-          clientName: inquiry.clientName || inquiry.callerName || "Unknown Client",
-          phoneNumber: inquiry.phoneNumber || "Not provided",
-          email: inquiry.email || undefined,
-          expectedAdmitDate: inquiry.expectedAdmitDate || "Not set",
-          levelOfCare: inquiry.levelOfCare 
-            ? levelOfCareDisplayNames[inquiry.levelOfCare as LevelOfCare] || inquiry.levelOfCare 
-            : "Not specified",
-          insuranceProvider: inquiry.insuranceProvider || undefined,
-          insurancePolicyId: inquiry.insurancePolicyId || undefined,
-          schedulingNotes: inquiry.schedulingNotes || undefined,
-        }, staffEmails).catch(err => console.error("Failed to send scheduled notification:", err));
-      }
-
       res.json(inquiry);
     } catch (error) {
       console.error("Error updating inquiry:", error);
@@ -306,6 +276,69 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     } catch (error) {
       console.error("Error deleting inquiry:", error);
       res.status(500).json({ message: "Failed to delete inquiry" });
+    }
+  });
+
+  // Manual staff notification endpoint - sends email to all staff about new admission
+  app.post("/api/inquiries/:id/notify-staff", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const inquiry = await storage.getInquiry(id);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      // Get notification settings for scheduled stage
+      const notificationSettings = await storage.getNotificationSettings();
+      const scheduledSetting = notificationSettings.find(s => s.stageName === "scheduled");
+      
+      let staffEmails: string[] = [];
+      if (scheduledSetting?.enabled === "yes" && scheduledSetting.emailAddresses) {
+        staffEmails = scheduledSetting.emailAddresses
+          .split(",")
+          .map(e => e.trim())
+          .filter(e => e.length > 0 && e.includes("@"));
+      }
+      
+      // Fall back to NOTIFICATION_EMAIL env var
+      if (staffEmails.length === 0 && process.env.NOTIFICATION_EMAIL) {
+        staffEmails = [process.env.NOTIFICATION_EMAIL];
+      }
+      
+      if (staffEmails.length === 0) {
+        return res.status(400).json({ 
+          message: "No staff email addresses configured. Go to Settings to add emails for the 'scheduled' stage." 
+        });
+      }
+      
+      // Format date of birth
+      let dobFormatted: string | undefined;
+      if (inquiry.dateOfBirth) {
+        const dob = new Date(inquiry.dateOfBirth);
+        dobFormatted = `${(dob.getMonth() + 1).toString().padStart(2, '0')}/${dob.getDate().toString().padStart(2, '0')}/${dob.getFullYear()}`;
+      }
+      
+      const sent = await emailService.sendAdmissionScheduledNotification({
+        clientName: inquiry.clientName || inquiry.callerName || "Unknown Client",
+        phoneNumber: inquiry.phoneNumber || "Not provided",
+        dateOfBirth: dobFormatted,
+        expectedAdmitDate: inquiry.expectedAdmitDate || "Not set",
+        levelOfCare: inquiry.levelOfCare 
+          ? levelOfCareDisplayNames[inquiry.levelOfCare as LevelOfCare] || inquiry.levelOfCare 
+          : "Not specified",
+        insuranceProvider: inquiry.insuranceProvider || undefined,
+        insurancePolicyId: inquiry.insurancePolicyId || undefined,
+        schedulingNotes: inquiry.schedulingNotes || undefined,
+      }, staffEmails);
+      
+      res.json({ 
+        success: sent, 
+        recipientCount: staffEmails.length,
+        message: sent ? `Notification sent to ${staffEmails.length} staff member(s)` : "Email service not configured"
+      });
+    } catch (error) {
+      console.error("Error sending staff notification:", error);
+      res.status(500).json({ message: "Failed to send notification" });
     }
   });
 

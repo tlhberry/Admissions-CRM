@@ -53,6 +53,7 @@ import {
   Copy,
   Check,
   Pencil,
+  Mail,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource } from "@shared/schema";
 import {
@@ -554,7 +555,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
         )}
 
         {stage === "scheduled" && (
-          <SchedulingForm
+          <SchedulingFormWrapper
             inquiry={inquiry}
             onSubmit={(data) => updateMutation.mutate(data)}
             onAdmit={() => updateMutation.mutate({ actualAdmitDate: new Date().toISOString().split("T")[0], stage: "admitted" })}
@@ -1665,7 +1666,7 @@ const schedulingSchema = z.object({
   schedulingNotes: z.string().optional(),
 });
 
-function SchedulingForm({
+function SchedulingFormWrapper({
   inquiry,
   onSubmit,
   onAdmit,
@@ -1681,6 +1682,57 @@ function SchedulingForm({
   isPending: boolean;
   onCopy: () => void;
   copied: boolean;
+}) {
+  const { toast } = useToast();
+  
+  const notifyMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/inquiries/${inquiry.id}/notify-staff`);
+      return res.json();
+    },
+    onSuccess: (data: { message?: string }) => {
+      toast({ title: "Staff Notified", description: data.message || "Notification sent successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to send notification", variant: "destructive" });
+    },
+  });
+
+  return (
+    <SchedulingForm
+      inquiry={inquiry}
+      onSubmit={onSubmit}
+      onAdmit={onAdmit}
+      onLost={onLost}
+      isPending={isPending}
+      onCopy={onCopy}
+      copied={copied}
+      onNotifyStaff={() => notifyMutation.mutate()}
+      isNotifying={notifyMutation.isPending}
+    />
+  );
+}
+
+function SchedulingForm({
+  inquiry,
+  onSubmit,
+  onAdmit,
+  onLost,
+  isPending,
+  onCopy,
+  copied,
+  onNotifyStaff,
+  isNotifying,
+}: {
+  inquiry: Inquiry;
+  onSubmit: (data: z.infer<typeof schedulingSchema>) => void;
+  onAdmit: () => void;
+  onLost: () => void;
+  isPending: boolean;
+  onCopy: () => void;
+  copied: boolean;
+  onNotifyStaff: () => void;
+  isNotifying: boolean;
 }) {
   const form = useForm({
     resolver: zodResolver(schedulingSchema),
@@ -1844,6 +1896,22 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                     </>
                   )}
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={onNotifyStaff}
+                  disabled={isNotifying}
+                  className="flex-1"
+                  data-testid="button-notify-staff"
+                >
+                  {isNotifying ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Mail className="w-4 h-4 mr-2" />
+                  )}
+                  Notify Staff
+                </Button>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
                 <Button
                   size="lg"
                   className="flex-1 h-14 bg-green-600 hover:bg-green-700"

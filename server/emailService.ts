@@ -12,6 +12,7 @@ export interface AdmissionScheduledData {
   clientName: string;
   phoneNumber: string;
   email?: string;
+  dateOfBirth?: string;
   expectedAdmitDate: string;
   levelOfCare: string;
   insuranceProvider?: string;
@@ -94,28 +95,27 @@ class EmailService {
       return false;
     }
 
-    const subject = `New Admission Scheduled: ${data.clientName}`;
+    const subject = `New Admit Coming: ${data.clientName} - ${data.expectedAdmitDate}`;
     
     const text = `
-New Admission Scheduled
+We have a new admit! (expected to admit on ${data.expectedAdmitDate})
 
-Client Details:
-- Name: ${data.clientName}
-- Phone: ${data.phoneNumber}
-${data.email ? `- Email: ${data.email}` : ""}
+Client Name: ${data.clientName}
 
-Admission Details:
-- Expected Date: ${data.expectedAdmitDate}
-- Level of Care: ${data.levelOfCare}
+DOB: ${data.dateOfBirth || "Not provided"}
 
-Insurance Information:
-- Provider: ${data.insuranceProvider || "Not provided"}
-- Policy ID: ${data.insurancePolicyId || "Not provided"}
+Insurance Name: ${data.insuranceProvider || "Not provided"}
 
-${data.schedulingNotes ? `Notes:\n${data.schedulingNotes}` : ""}
+Insurance Policy ID: ${data.insurancePolicyId || "Not provided"}
+
+Admit Date: ${data.expectedAdmitDate}
+
+Admit LOC: ${data.levelOfCare}
+
+${data.schedulingNotes ? `Notes: ${data.schedulingNotes}` : ""}
 
 ---
-This notification was sent automatically by the Admissions CRM.
+This notification was sent from AdmitSimple CRM.
     `.trim();
 
     const html = `
@@ -123,47 +123,49 @@ This notification was sent automatically by the Admissions CRM.
 <html>
 <head>
   <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    body { font-family: Arial, sans-serif; line-height: 1.8; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #4f46e5; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-    .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
-    .section { margin-bottom: 20px; }
-    .label { font-weight: bold; color: #6b7280; }
-    .value { margin-left: 10px; }
-    .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; }
+    .header { background: #16a34a; color: white; padding: 24px; border-radius: 8px 8px 0 0; text-align: center; }
+    .content { background: #f9fafb; padding: 24px; border-radius: 0 0 8px 8px; }
+    .info-row { margin-bottom: 16px; }
+    .label { font-weight: bold; color: #374151; }
+    .value { color: #111827; }
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1 style="margin: 0;">New Admission Scheduled</h1>
-      <p style="margin: 10px 0 0 0; opacity: 0.9;">${data.clientName}</p>
+      <h1 style="margin: 0; font-size: 24px;">We have a new admit!</h1>
+      <p style="margin: 12px 0 0 0; font-size: 18px; opacity: 0.95;">(expected to admit on ${data.expectedAdmitDate})</p>
     </div>
     <div class="content">
-      <div class="section">
-        <h3 style="margin-top: 0;">Client Details</h3>
-        <p><span class="label">Name:</span><span class="value">${data.clientName}</span></p>
-        <p><span class="label">Phone:</span><span class="value">${data.phoneNumber}</span></p>
-        ${data.email ? `<p><span class="label">Email:</span><span class="value">${data.email}</span></p>` : ""}
+      <div class="info-row">
+        <span class="label">Client Name:</span> <span class="value">${data.clientName}</span>
       </div>
-      <div class="section">
-        <h3>Admission Details</h3>
-        <p><span class="label">Expected Date:</span><span class="value">${data.expectedAdmitDate}</span></p>
-        <p><span class="label">Level of Care:</span><span class="value">${data.levelOfCare}</span></p>
+      <div class="info-row">
+        <span class="label">DOB:</span> <span class="value">${data.dateOfBirth || "Not provided"}</span>
       </div>
-      <div class="section">
-        <h3>Insurance Information</h3>
-        <p><span class="label">Provider:</span><span class="value">${data.insuranceProvider || "Not provided"}</span></p>
-        <p><span class="label">Policy ID:</span><span class="value">${data.insurancePolicyId || "Not provided"}</span></p>
+      <div class="info-row">
+        <span class="label">Insurance Name:</span> <span class="value">${data.insuranceProvider || "Not provided"}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Insurance Policy ID:</span> <span class="value">${data.insurancePolicyId || "Not provided"}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Admit Date:</span> <span class="value">${data.expectedAdmitDate}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Admit LOC:</span> <span class="value">${data.levelOfCare}</span>
       </div>
       ${data.schedulingNotes ? `
-      <div class="section">
-        <h3>Notes</h3>
-        <p>${data.schedulingNotes}</p>
+      <div class="info-row" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <span class="label">Notes:</span><br/>
+        <span class="value">${data.schedulingNotes}</span>
       </div>
       ` : ""}
       <div class="footer">
-        This notification was sent automatically by the Admissions CRM.
+        This notification was sent from AdmitSimple CRM.
       </div>
     </div>
   </div>
