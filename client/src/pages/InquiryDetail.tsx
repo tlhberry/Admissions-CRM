@@ -1723,23 +1723,27 @@ function SchedulingFormWrapper({
       return res.json();
     },
     onSuccess: (data: { message?: string }) => {
-      toast({ title: "Staff Notified", description: data.message || "Notification sent successfully" });
+      toast({ title: "Email Sent", description: data.message || "Schedule email sent to staff" });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to send notification", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to send email", variant: "destructive" });
     },
   });
+
+  const handleSubmitAndNotify = async (data: z.infer<typeof schedulingSchema>) => {
+    onSubmit(data);
+    notifyMutation.mutate();
+  };
 
   return (
     <SchedulingForm
       inquiry={inquiry}
-      onSubmit={onSubmit}
+      onSubmit={handleSubmitAndNotify}
       onAdmit={onAdmit}
       onLost={onLost}
       isPending={isPending}
       onCopy={onCopy}
       copied={copied}
-      onNotifyStaff={() => notifyMutation.mutate()}
       isNotifying={notifyMutation.isPending}
     />
   );
@@ -1753,7 +1757,6 @@ function SchedulingForm({
   isPending,
   onCopy,
   copied,
-  onNotifyStaff,
   isNotifying,
 }: {
   inquiry: Inquiry;
@@ -1763,7 +1766,6 @@ function SchedulingForm({
   isPending: boolean;
   onCopy: () => void;
   copied: boolean;
-  onNotifyStaff: () => void;
   isNotifying: boolean;
 }) {
   const form = useForm({
@@ -1886,16 +1888,45 @@ function SchedulingForm({
             <Button
               type="submit"
               size="lg"
-              variant="outline"
               className="w-full"
-              disabled={isPending}
-              data-testid="button-save-schedule"
+              disabled={isPending || isNotifying}
+              data-testid="button-send-schedule-email"
             >
-              {isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : null}
-              Save Schedule Details
+              {isPending || isNotifying ? (
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <Mail className="w-5 h-5 mr-2" />
+              )}
+              Send Schedule Email to Staff
             </Button>
           </form>
         </Form>
+
+        <Button
+          size="lg"
+          className="w-full bg-green-600 hover:bg-green-700"
+          onClick={onAdmit}
+          disabled={isPending}
+          data-testid="button-move-to-admitted"
+        >
+          {isPending ? (
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+          ) : (
+            <UserCheck className="w-5 h-5 mr-2" />
+          )}
+          Move to Admitted Stage
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={onLost}
+          disabled={isPending}
+          className="w-full border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
+          data-testid="button-mark-lost"
+        >
+          <XCircle className="w-4 h-4 mr-2" />
+          Mark as Lost Client
+        </Button>
 
         {isScheduled && (
           <>
@@ -1908,66 +1939,23 @@ Client Name: ${inquiry.clientName || inquiry.callerName || "Unknown"}, DOB: ${in
 Insurance: ${inquiry.insuranceProvider || "N/A"}, Policy ID: ${inquiry.insurancePolicyId || "N/A"}
 Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCare as LevelOfCare] : "TBD"}`}
               </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  variant="outline"
-                  onClick={onCopy}
-                  className="flex-1"
-                  data-testid="button-copy-summary"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Summary
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={onNotifyStaff}
-                  disabled={isNotifying}
-                  className="flex-1"
-                  data-testid="button-notify-staff"
-                >
-                  {isNotifying ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Mail className="w-4 h-4 mr-2" />
-                  )}
-                  Notify Staff
-                </Button>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  size="lg"
-                  className="flex-1 h-14 bg-green-600 hover:bg-green-700"
-                  onClick={onAdmit}
-                  disabled={isPending}
-                  data-testid="button-mark-admitted"
-                >
-                  {isPending ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <UserCheck className="w-5 h-5 mr-2" />
-                  )}
-                  Mark as Admitted
-                </Button>
-              </div>
               <Button
                 variant="outline"
-                onClick={onLost}
-                disabled={isPending}
-                className="w-full mt-2 border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
-                data-testid="button-mark-lost"
+                onClick={onCopy}
+                className="w-full"
+                data-testid="button-copy-summary"
               >
-                <XCircle className="w-4 h-4 mr-2" />
-                Mark as Lost Client
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy Summary
+                  </>
+                )}
               </Button>
             </div>
           </>
