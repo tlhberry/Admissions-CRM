@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useTheme } from "@/hooks/useTheme";
 import { 
   Phone, 
   ClipboardCheck, 
@@ -9,23 +8,14 @@ import {
   Calendar,
   ArrowRight
 } from "lucide-react";
-import logoDay from "@assets/IMG_8329_1765685525841.png";
-import logoNight from "@assets/IMG_8330_1765685525842.png";
 
 export default function Landing() {
-  const theme = useTheme();
   
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <img 
-              src={theme === "dark" ? logoNight : logoDay} 
-              alt="AdmitSimple" 
-              className="h-10 w-auto"
-              data-testid="img-logo"
-            />
             <h1 className="text-xl font-bold">AdmitSimple</h1>
           </div>
           <div className="flex items-center gap-2">

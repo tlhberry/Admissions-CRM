@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
-import { useTheme } from "@/hooks/useTheme";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -15,8 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import logoDay from "@assets/IMG_8329_1765685525841.png";
-import logoNight from "@assets/IMG_8330_1765685525842.png";
 import {
   Plus,
   Phone,
@@ -74,7 +71,6 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
-  const theme = useTheme();
 
   const { data: inquiries, isLoading } = useQuery<Inquiry[]>({
     queryKey: ["/api/inquiries"],
@@ -150,13 +146,7 @@ export default function Dashboard() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <img 
-              src={theme === "dark" ? logoNight : logoDay} 
-              alt="AdmitSimple" 
-              className="h-10 w-auto"
-              data-testid="img-logo"
-            />
-            <h1 className="text-xl font-bold hidden sm:block">AdmitSimple</h1>
+            <h1 className="text-xl font-bold">AdmitSimple</h1>
           </div>
           
           <div className="flex items-center gap-2">
