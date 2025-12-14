@@ -116,7 +116,16 @@ export async function registerRoutes(
       // Get the current inquiry to check for stage change
       const currentInquiry = await storage.getInquiry(id);
       
-      const validatedData = updateInquirySchema.parse(req.body);
+      // Convert date strings to Date objects
+      const body = { ...req.body };
+      if (body.vobCompletedAt && typeof body.vobCompletedAt === 'string') {
+        body.vobCompletedAt = new Date(body.vobCompletedAt);
+      }
+      if (body.preAssessmentDate && typeof body.preAssessmentDate === 'string') {
+        body.preAssessmentDate = new Date(body.preAssessmentDate);
+      }
+      
+      const validatedData = updateInquirySchema.parse(body);
       const inquiry = await storage.updateInquiry(id, validatedData);
 
       if (!inquiry) {
