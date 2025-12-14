@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, type InquiryFilters } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { 
   insertInquirySchema, 
   updateInquirySchema, 
@@ -97,6 +97,47 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Get current user's company
+  app.get("/api/company", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.companyId) {
+        return res.status(404).json({ message: "No company associated with user" });
+      }
+      const company = await storage.getCompany(user.companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      res.json(company);
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  // Update current user's company (Admin only)
+  app.patch("/api/company", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.companyId) {
+        return res.status(404).json({ message: "No company associated with user" });
+      }
+      if (user.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update company settings" });
+      }
+      const company = await storage.updateCompany(user.companyId, req.body);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      res.json(company);
+    } catch (error) {
+      console.error("Error updating company:", error);
+      res.status(500).json({ message: "Failed to update company" });
     }
   });
 
@@ -819,6 +860,43 @@ ${transcription}`;
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Admin-only: Update user role or status
+  app.patch("/api/users/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const targetUserId = req.params.id;
+      const currentUserId = req.user.claims.sub;
+      
+      // Don't allow admins to demote themselves
+      if (targetUserId === currentUserId && req.body.role && req.body.role !== 'admin') {
+        return res.status(400).json({ message: "Cannot demote yourself from admin" });
+      }
+      
+      // Verify user belongs to same company
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser || targetUser.companyId !== companyId) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Only allow updating role and isActive
+      const allowedFields = ['role', 'isActive'];
+      const updateData: any = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
+      }
+      
+      const updatedUser = await storage.updateUser(targetUserId, updateData);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
     }
   });
 

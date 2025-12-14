@@ -38,8 +38,9 @@ import {
   FileBarChart,
   UserX,
   ClipboardList,
+  UserCog,
 } from "lucide-react";
-import type { Inquiry, PipelineStage } from "@shared/schema";
+import type { Inquiry, PipelineStage, Company } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
 import { format, differenceInHours } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -74,6 +75,11 @@ export default function Dashboard() {
 
   const { data: inquiries, isLoading } = useQuery<Inquiry[]>({
     queryKey: ["/api/inquiries"],
+  });
+
+  const { data: company, error: companyError } = useQuery<Company>({
+    queryKey: ["/api/company"],
+    retry: false, // Don't retry on 404 - user may not have a company yet
   });
 
   const testCTMWebhook = useMutation({
@@ -165,6 +171,11 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold">AdmitSimple</h1>
+            {company && (
+              <span className="text-sm text-muted-foreground hidden sm:inline" data-testid="text-company-name">
+                {company.name}
+              </span>
+            )}
           </div>
           
           <div className="flex items-center gap-2">
@@ -262,6 +273,12 @@ export default function Dashboard() {
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </DropdownMenuItem>
+                {user?.role === "admin" && (
+                  <DropdownMenuItem onClick={() => navigate("/admin")} className="cursor-pointer" data-testid="menu-admin-settings">
+                    <UserCog className="w-4 h-4 mr-2" />
+                    Admin Settings
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <a href="/api/logout" className="cursor-pointer" data-testid="button-logout">
@@ -278,17 +295,17 @@ export default function Dashboard() {
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="mb-8">
           <h2 className="text-2xl md:text-3xl font-bold mb-2">Pipeline Overview</h2>
-          <p className="text-muted-foreground">
+          <div className="text-muted-foreground">
             {isLoading ? (
               <Skeleton className="h-5 w-48" />
             ) : (
-              <>
+              <p>
                 {totalActive} active {totalActive === 1 ? "inquiry" : "inquiries"} 
                 {" | "} {admittedCount} admitted 
                 {" | "} {nonViableCount} non-viable
-              </>
+              </p>
             )}
-          </p>
+          </div>
         </div>
 
         {followUpReminders.length > 0 && (

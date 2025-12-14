@@ -51,13 +51,44 @@ function updateUserSession(
 }
 
 async function upsertUser(claims: any) {
-  await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-  });
+  const userId = claims["sub"];
+  const email = claims["email"];
+  const firstName = claims["first_name"];
+  const lastName = claims["last_name"];
+  const profileImageUrl = claims["profile_image_url"];
+
+  // Check if user already exists
+  const existingUser = await storage.getUser(userId);
+
+  if (existingUser && existingUser.companyId) {
+    // User exists with a company - just update their info
+    await storage.upsertUser({
+      id: userId,
+      email,
+      firstName,
+      lastName,
+      profileImageUrl,
+      companyId: existingUser.companyId,
+      role: existingUser.role,
+    });
+  } else {
+    // New user or user without company - create a new company for them
+    const companyName = `${firstName || 'My'} ${lastName || 'Company'}`.trim() || 'My Company';
+    const company = await storage.createCompany({
+      name: companyName,
+    });
+
+    // Create user as Admin of the new company
+    await storage.upsertUser({
+      id: userId,
+      email,
+      firstName,
+      lastName,
+      profileImageUrl,
+      companyId: company.id,
+      role: 'admin',
+    });
+  }
 }
 
 export async function setupAuth(app: Express) {
@@ -154,5 +185,25 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   } catch (error) {
     res.status(401).json({ message: "Unauthorized" });
     return;
+  }
+};
+
+// Role-based access control middleware - requires admin role
+export const isAdmin: RequestHandler = async (req, res, next) => {
+  const user = req.user as any;
+
+  if (!req.isAuthenticated() || !user?.claims?.sub) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: "Forbidden: Admin access required" });
+    }
+    return next();
+  } catch (error) {
+    console.error("Error checking admin status:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
