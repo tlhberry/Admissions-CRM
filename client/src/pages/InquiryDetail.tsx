@@ -104,6 +104,8 @@ export default function InquiryDetail() {
   const [tempName, setTempName] = useState("");
   const [editingReferral, setEditingReferral] = useState(false);
   const [referralSearch, setReferralSearch] = useState("");
+  const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
@@ -164,6 +166,38 @@ export default function InquiryDetail() {
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message || "Failed to send email", variant: "destructive" });
+    },
+  });
+
+  const createAccountMutation = useMutation({
+    mutationFn: async (data: { name: string }) => {
+      // Create the new referral account only
+      const response = await apiRequest("POST", "/api/referral-accounts", data);
+      return response.json() as Promise<ReferralAccount>;
+    },
+    onSuccess: async (newAccount) => {
+      try {
+        // Use updateMutation.mutateAsync to update inquiry through shared pipeline
+        await updateMutation.mutateAsync({
+          referralOrigin: "account",
+          referralAccountId: newAccount.id,
+          onlineSource: null,
+        });
+        
+        // Invalidate referral accounts cache after inquiry update succeeds
+        await queryClient.invalidateQueries({ queryKey: ["/api/referral-accounts"] });
+        
+        // Clear UI state and show success
+        setShowCreateAccountDialog(false);
+        setNewAccountName("");
+        setEditingReferral(false);
+        setReferralSearch("");
+      } catch (err) {
+        toast({ title: "Error", description: "Account created but failed to link to inquiry", variant: "destructive" });
+      }
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message || "Failed to create account", variant: "destructive" });
     },
   });
 
@@ -444,6 +478,18 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                           !Object.values(onlineReferralSourceDisplayNames).some(n => n.toLowerCase().includes(referralSearch.toLowerCase()))) && (
                           <div className="px-3 py-2 text-muted-foreground text-sm">No matching sources found</div>
                         )}
+                        {/* Create new account option */}
+                        <button
+                          className="w-full px-3 py-2 text-left hover-elevate flex items-center gap-2 border-t"
+                          onClick={() => {
+                            setShowCreateAccountDialog(true);
+                            setNewAccountName(referralSearch);
+                          }}
+                          data-testid="button-create-referral-account"
+                        >
+                          <Badge variant="outline" className="text-xs">New</Badge>
+                          <span>Create "{referralSearch || 'new account'}"</span>
+                        </button>
                       </div>
                     )}
                     <Button
@@ -709,6 +755,32 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
         onConfirm={handleLost}
         isPending={updateMutation.isPending}
       />
+
+      <Dialog open={showCreateAccountDialog} onOpenChange={setShowCreateAccountDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Referral Account</DialogTitle>
+            <DialogDescription>Enter a name for the new referral source</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newAccountName}
+            onChange={(e) => setNewAccountName(e.target.value)}
+            placeholder="Account name"
+            data-testid="input-new-account-name"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateAccountDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={() => createAccountMutation.mutate({ name: newAccountName })}
+              disabled={!newAccountName.trim() || createAccountMutation.isPending}
+              data-testid="button-confirm-create-account"
+            >
+              {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
