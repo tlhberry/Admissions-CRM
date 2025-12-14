@@ -527,8 +527,8 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               </div>
               {inquiry.initialNotes && (
                 <div className="sm:col-span-2">
-                  <p className="text-sm text-muted-foreground">Notes</p>
-                  <p className="font-medium whitespace-pre-line">{inquiry.initialNotes}</p>
+                  <p className="text-sm text-muted-foreground">Call Notes</p>
+                  <p className="font-medium whitespace-pre-line" data-testid="text-call-notes">{inquiry.initialNotes}</p>
                 </div>
               )}
               {(inquiry.ctmCallId || inquiry.ctmTrackingNumber || inquiry.callDurationSeconds || inquiry.callRecordingUrl) && (

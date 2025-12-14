@@ -362,13 +362,13 @@ export default function NewInquiry() {
                   name="initialNotes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base">Initial Notes</FormLabel>
+                      <FormLabel className="text-base">Call Notes</FormLabel>
                       <FormControl>
                         <Textarea
                           {...field}
-                          placeholder="Any important details from the call..."
+                          placeholder="Enter notes from the call (use this when AI transcription is unavailable)..."
                           className="text-base min-h-32 resize-none"
-                          data-testid="input-notes"
+                          data-testid="input-call-notes"
                         />
                       </FormControl>
                       <FormMessage />
