@@ -183,13 +183,13 @@ export default function Dashboard() {
             <h1 className="text-xl font-bold">AdmitSimple</h1>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button data-testid="button-add-new" className="gap-2">
-                  <Plus className="w-5 h-5" />
+                <Button data-testid="button-add-new" size="sm" className="gap-1 sm:gap-2">
+                  <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="hidden sm:inline">New</span>
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
@@ -214,7 +214,7 @@ export default function Dashboard() {
               onClick={() => navigate("/search")}
               data-testid="button-search"
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
             
             <Button 
@@ -222,6 +222,7 @@ export default function Dashboard() {
               size="icon"
               onClick={() => navigate("/analytics")}
               data-testid="button-analytics"
+              className="hidden sm:flex"
             >
               <BarChart3 className="w-5 h-5" />
             </Button>
@@ -232,6 +233,7 @@ export default function Dashboard() {
               onClick={() => navigate("/reports")}
               data-testid="button-reports"
               title="Reports"
+              className="hidden sm:flex"
             >
               <FileBarChart className="w-5 h-5" />
             </Button>
@@ -243,6 +245,7 @@ export default function Dashboard() {
               disabled={testCTMWebhook.isPending}
               data-testid="button-test-ctm"
               title="Test CTM Webhook"
+              className="hidden sm:flex"
             >
               <PhoneIncoming className="w-5 h-5" />
             </Button>
@@ -266,13 +269,27 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">{user?.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/accounts")} className="cursor-pointer" data-testid="menu-accounts">
-                  <Building2 className="w-4 h-4 mr-2" />
-                  Referral Accounts
+                <DropdownMenuItem onClick={() => navigate("/analytics")} className="cursor-pointer sm:hidden" data-testid="menu-analytics-mobile">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Analytics
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/reports")} className="cursor-pointer" data-testid="menu-reports">
                   <FileBarChart className="w-4 h-4 mr-2" />
                   Reports
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => testCTMWebhook.mutate()} 
+                  className="cursor-pointer sm:hidden" 
+                  disabled={testCTMWebhook.isPending}
+                  data-testid="menu-test-ctm-mobile"
+                >
+                  <PhoneIncoming className="w-4 h-4 mr-2" />
+                  Test CTM Call
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="sm:hidden" />
+                <DropdownMenuItem onClick={() => navigate("/accounts")} className="cursor-pointer" data-testid="menu-accounts">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Referral Accounts
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer" data-testid="menu-settings">
                   <Settings className="w-4 h-4 mr-2" />
