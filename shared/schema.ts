@@ -442,3 +442,66 @@ export const insertNotificationSettingSchema = createInsertSchema(notificationSe
 
 export type NotificationSetting = typeof notificationSettings.$inferSelect;
 export type InsertNotificationSetting = z.infer<typeof insertNotificationSettingSchema>;
+
+// Pre-Assessment Form 1: RB Pre-Cert / Clinical Pre-Assessment
+export const preCertForms = pgTable("pre_cert_forms", {
+  id: serial("id").primaryKey(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull().unique(),
+  formData: jsonb("form_data").notNull().default({}),
+  isComplete: varchar("is_complete", { length: 10 }).default("no"),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPreCertFormSchema = createInsertSchema(preCertForms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PreCertForm = typeof preCertForms.$inferSelect;
+export type InsertPreCertForm = z.infer<typeof insertPreCertFormSchema>;
+
+// Pre-Assessment Form 2: Nursing Admission Assessment
+export const nursingAssessmentForms = pgTable("nursing_assessment_forms", {
+  id: serial("id").primaryKey(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull().unique(),
+  formData: jsonb("form_data").notNull().default({}),
+  isComplete: varchar("is_complete", { length: 10 }).default("no"),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertNursingAssessmentFormSchema = createInsertSchema(nursingAssessmentForms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type NursingAssessmentForm = typeof nursingAssessmentForms.$inferSelect;
+export type InsertNursingAssessmentForm = z.infer<typeof insertNursingAssessmentFormSchema>;
+
+// Pre-Assessment Form 3: Pre-Screening Form
+export const preScreeningForms = pgTable("pre_screening_forms", {
+  id: serial("id").primaryKey(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull().unique(),
+  formData: jsonb("form_data").notNull().default({}),
+  isComplete: varchar("is_complete", { length: 10 }).default("no"),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPreScreeningFormSchema = createInsertSchema(preScreeningForms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PreScreeningForm = typeof preScreeningForms.$inferSelect;
+export type InsertPreScreeningForm = z.infer<typeof insertPreScreeningFormSchema>;
