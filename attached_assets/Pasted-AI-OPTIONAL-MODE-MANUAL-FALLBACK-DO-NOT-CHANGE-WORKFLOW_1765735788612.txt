@@ -1,0 +1,86 @@
+AI OPTIONAL MODE + MANUAL FALLBACK (DO NOT CHANGE WORKFLOWS)
+
+Goal:
+Ensure every AI-powered feature in AdmitSimple is OPTIONAL and that the app
+remains fully functional using manual entry for all pipeline stages and all forms.
+
+IMPORTANT:
+- Do NOT remove any existing manual fields or manual forms.
+- Do NOT require AI to complete any stage.
+- AI may assist, but manual completion must always be possible.
+
+---------------------------------------
+1) DUAL PATH FOR EVERY AI FEATURE
+---------------------------------------
+For each AI capability (transcription, call summarization, AI form fill, VOB summary, client overview summary):
+- Provide a clear toggle/button: "Use AI" / "Fill Manually"
+- Default to MANUAL when:
+  - AI feature is disabled in billing settings
+  - monthly budget is exceeded
+  - AI call fails
+  - admin has turned off that feature toggle
+
+When AI is unavailable, show a simple message:
+"AI is not enabled for your account. Continue manually."
+
+---------------------------------------
+2) PIPELINE STAGES MUST WORK WITHOUT AI
+---------------------------------------
+No pipeline stage can require an AI action to progress.
+Stages can be completed manually by entering required fields.
+
+If AI is blocked due to budget limits, it must not block moving stages.
+Only the AI action is blocked, not the workflow.
+
+---------------------------------------
+3) FORMS MUST BE FULLY MANUAL
+---------------------------------------
+All Pre-Assessment forms and any other forms must support:
+- manual checkboxes
+- manual radio buttons
+- manual text fields
+- manual tables for substance history
+- manual signatures if applicable (typed name/date acceptable)
+
+AI form-fill is an optional helper:
+- "Auto-fill from call/transcript" button
+- It pre-populates fields and highlights changes
+- User can accept/edit every field before saving
+
+---------------------------------------
+4) BILLING + LIMITS BEHAVIOR
+---------------------------------------
+If company hits AI budget hard stop:
+- Block AI actions only
+- Show “AI unavailable” banner and offer manual flow
+- Do not prevent creating inquiries, completing forms, running reports, or moving stages
+
+Add a Billing setting:
+- "AI Assistance Mode" (ON/OFF)
+When OFF: hide AI buttons and keep everything manual.
+
+---------------------------------------
+5) UX REQUIREMENTS (KEEP IT SIMPLE)
+---------------------------------------
+In each relevant area add a small, consistent UI pattern:
+- Two buttons near the top:
+  - "Use AI Assist"
+  - "Fill Manually"
+If AI is disabled, show only "Fill Manually"
+
+Never show errors that confuse staff.
+If AI fails, fall back silently to manual with a short note.
+
+---------------------------------------
+6) DATA INTEGRITY
+---------------------------------------
+Whether AI or manual is used, all data saves to the same fields and schema.
+AI does not create separate “AI-only” fields.
+
+---------------------------------------
+DELIVERABLES
+---------------------------------------
+- Manual completion works for every form and stage
+- AI features can be turned on/off per company and per feature
+- Budget limits disable AI only, not workflow
+- Clear UI toggles for AI vs manual

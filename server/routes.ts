@@ -23,6 +23,82 @@ import path from "path";
 import fs from "fs";
 import OpenAI from "openai";
 
+// Helper function to check and reset monthly AI usage if needed
+async function checkAndResetMonthlyUsage(companyId: number): Promise<void> {
+  const company = await storage.getCompany(companyId);
+  if (!company) return;
+  
+  const now = new Date();
+  const resetDate = company.aiUsageResetDate ? new Date(company.aiUsageResetDate) : null;
+  
+  // If no reset date is set, initialize to first day of next month
+  if (!resetDate) {
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    await storage.updateCompany(companyId, {
+      aiUsageResetDate: nextMonth,
+    });
+    return;
+  }
+  
+  // If reset date has passed, reset usage and roll forward to next month from that anchor
+  if (now >= resetDate) {
+    // Calculate next reset date by adding one month to current reset date
+    const nextResetDate = new Date(resetDate);
+    nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+    
+    await storage.updateCompany(companyId, {
+      aiUsageThisMonthCents: 0,
+      aiUsageResetDate: nextResetDate,
+    });
+  }
+}
+
+// Helper function to check if AI is available for a company
+async function isAiAvailable(companyId: number): Promise<{ available: boolean; reason?: string }> {
+  const company = await storage.getCompany(companyId);
+  if (!company) {
+    return { available: false, reason: "Company not found" };
+  }
+  
+  // Check and reset monthly usage if needed
+  await checkAndResetMonthlyUsage(companyId);
+  
+  // Re-fetch company after potential reset
+  const updatedCompany = await storage.getCompany(companyId);
+  if (!updatedCompany) {
+    return { available: false, reason: "Company not found" };
+  }
+  
+  // Check if AI is enabled
+  if (updatedCompany.aiAssistanceEnabled === "no") {
+    return { available: false, reason: "Disabled" };
+  }
+  
+  // Check budget limit (null = unlimited)
+  if (updatedCompany.aiBudgetLimitCents !== null && updatedCompany.aiBudgetLimitCents > 0) {
+    const usage = updatedCompany.aiUsageThisMonthCents || 0;
+    if (usage >= updatedCompany.aiBudgetLimitCents) {
+      return { available: false, reason: "Budget exceeded" };
+    }
+  }
+  
+  return { available: true };
+}
+
+// Helper to increment AI usage tracking (cost is in cents)
+async function trackAiUsage(companyId: number, costCents: number): Promise<void> {
+  const company = await storage.getCompany(companyId);
+  if (!company) return;
+  
+  const currentUsage = company.aiUsageThisMonthCents || 0;
+  await storage.updateCompany(companyId, {
+    aiUsageThisMonthCents: currentUsage + costCents,
+  });
+}
+
+// Estimated cost per transcription in cents (whisper + gpt-4o extraction)
+const AI_TRANSCRIPTION_COST_CENTS = 50; // ~$0.50 per transcription
+
 // Helper function to transcribe call and extract data (used by CTM webhook)
 async function transcribeAndExtractCallData(inquiryId: number, companyId: number, recordingUrl: string): Promise<void> {
   try {
@@ -826,12 +902,20 @@ Return a JSON object with these fields (use null if not found, use dollar amount
 
       console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber} (company: ${company.name})`);
       
-      // Trigger auto-transcription if recording URL is available
+      // Trigger auto-transcription if recording URL is available AND AI is enabled
       // This runs asynchronously so the webhook responds quickly
+      let autoTranscriptionTriggered = false;
       if (callRecordingUrl) {
-        console.log(`CTM webhook: Triggering auto-transcription for inquiry #${inquiry.id}`);
-        transcribeAndExtractCallData(inquiry.id, company.id, callRecordingUrl)
-          .catch(err => console.error(`Auto-transcription failed for inquiry #${inquiry.id}:`, err));
+        const aiStatus = await isAiAvailable(company.id);
+        if (aiStatus.available) {
+          console.log(`CTM webhook: Triggering auto-transcription for inquiry #${inquiry.id}`);
+          transcribeAndExtractCallData(inquiry.id, company.id, callRecordingUrl)
+            .then(() => trackAiUsage(company.id, AI_TRANSCRIPTION_COST_CENTS))
+            .catch(err => console.error(`Auto-transcription failed for inquiry #${inquiry.id}:`, err));
+          autoTranscriptionTriggered = true;
+        } else {
+          console.log(`CTM webhook: Skipping auto-transcription for inquiry #${inquiry.id} - ${aiStatus.reason}`);
+        }
       }
       
       res.status(201).json({ 
@@ -839,11 +923,33 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         inquiryId: inquiry.id,
         message: "Inquiry created from CTM webhook",
         caller: phoneNumber,
-        autoTranscriptionTriggered: !!callRecordingUrl,
+        autoTranscriptionTriggered,
       });
     } catch (error) {
       console.error("CTM webhook error:", error);
       res.status(500).json({ message: "Failed to process CTM webhook" });
+    }
+  });
+
+  // Check AI availability for current company
+  app.get("/api/ai/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const aiStatus = await isAiAvailable(companyId);
+      const company = await storage.getCompany(companyId);
+      
+      res.json({
+        available: aiStatus.available,
+        reason: aiStatus.reason,
+        enabled: company?.aiAssistanceEnabled !== "no",
+        budgetLimitCents: company?.aiBudgetLimitCents,
+        usageThisMonthCents: company?.aiUsageThisMonthCents || 0,
+      });
+    } catch (error) {
+      console.error("Error checking AI status:", error);
+      res.status(500).json({ message: "Failed to check AI status" });
     }
   });
 
@@ -856,6 +962,15 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid inquiry ID" });
+
+      // Check AI availability before proceeding
+      const aiStatus = await isAiAvailable(companyId);
+      if (!aiStatus.available) {
+        return res.status(403).json({ 
+          message: aiStatus.reason || "AI assistance is not available",
+          aiDisabled: true 
+        });
+      }
 
       const inquiry = await storage.getInquiry(id, companyId);
       if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
@@ -957,6 +1072,9 @@ ${transcription}`;
       }
 
       const updatedInquiry = await storage.updateInquiry(id, companyId, updateData);
+
+      // Track AI usage
+      await trackAiUsage(companyId, AI_TRANSCRIPTION_COST_CENTS);
 
       res.json({
         success: true,

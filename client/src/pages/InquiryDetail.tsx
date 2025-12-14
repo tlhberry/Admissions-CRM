@@ -933,6 +933,14 @@ const insuranceSchema = z.object({
   insuranceNotes: z.string().optional(),
 });
 
+interface AIStatus {
+  available: boolean;
+  reason?: string;
+  enabled?: boolean;
+  budgetLimitCents?: number | null;
+  usageThisMonthCents?: number;
+}
+
 function InsuranceForm({
   inquiry,
   onSubmit,
@@ -947,6 +955,10 @@ function InsuranceForm({
   const { toast } = useToast();
   const [isTranscribing, setIsTranscribing] = useState(false);
   
+  const { data: aiStatus, isLoading: aiStatusLoading } = useQuery<AIStatus>({
+    queryKey: ["/api/ai/status"],
+  });
+  
   const form = useForm({
     resolver: zodResolver(insuranceSchema),
     defaultValues: {
@@ -960,6 +972,15 @@ function InsuranceForm({
   });
 
   const handleAIAutoFill = async () => {
+    if (!aiStatus?.available) {
+      toast({
+        title: "AI Not Available",
+        description: aiStatus?.reason || "AI assistance is currently disabled.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsTranscribing(true);
     try {
       const response = await apiRequest("POST", `/api/inquiries/${inquiry.id}/transcribe`);
@@ -981,23 +1002,30 @@ function InsuranceForm({
         }
         
         queryClient.invalidateQueries({ queryKey: [`/api/inquiries/${inquiry.id}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/ai/status"] });
         
         toast({
           title: "Call Transcribed",
           description: "Form fields have been auto-filled from the call recording.",
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Transcription error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Could not transcribe the call recording.";
       toast({
         title: "Transcription Failed",
-        description: "Could not transcribe the call recording. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsTranscribing(false);
     }
   };
+
+  const hasRecording = !!inquiry.callRecordingUrl;
+  const aiStatusReady = !aiStatusLoading && aiStatus !== undefined;
+  const showAIButton = hasRecording && aiStatusReady && aiStatus?.available;
+  const showAIUnavailableMessage = hasRecording && aiStatusReady && !aiStatus?.available;
 
   return (
     <Card>
@@ -1012,27 +1040,37 @@ function InsuranceForm({
               <CardDescription>Collect client insurance details</CardDescription>
             </div>
           </div>
-          {inquiry.callRecordingUrl && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleAIAutoFill}
-              disabled={isTranscribing}
-              data-testid="button-ai-autofill"
-            >
-              {isTranscribing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Transcribing...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="w-4 h-4 mr-2" />
-                  AI Auto-Fill
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {showAIButton && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAIAutoFill}
+                disabled={isTranscribing}
+                data-testid="button-ai-autofill"
+              >
+                {isTranscribing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Transcribing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Use AI Assist
+                  </>
+                )}
+              </Button>
+            )}
+            {hasRecording && !aiStatusLoading && (
+              <Badge variant="outline" className="text-xs" data-testid="badge-manual-entry">
+                {showAIUnavailableMessage 
+                  ? `AI ${aiStatus?.reason || "Unavailable"} - Fill manually below`
+                  : "Or fill manually"
+                }
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>

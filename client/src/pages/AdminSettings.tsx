@@ -22,7 +22,10 @@ import {
   Copy,
   Check,
   UserCog,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Company, User, UserRole } from "@shared/schema";
 
@@ -42,28 +45,37 @@ export default function AdminSettings() {
 
   const [companyName, setCompanyName] = useState("");
   const [companyNameInitialized, setCompanyNameInitialized] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiBudgetLimit, setAiBudgetLimit] = useState("");
+  const [aiSettingsInitialized, setAiSettingsInitialized] = useState(false);
 
   if (company && !companyNameInitialized) {
     setCompanyName(company.name);
     setCompanyNameInitialized(true);
   }
 
+  if (company && !aiSettingsInitialized) {
+    setAiEnabled(company.aiAssistanceEnabled !== "no");
+    setAiBudgetLimit(company.aiBudgetLimitCents ? String(company.aiBudgetLimitCents / 100) : "");
+    setAiSettingsInitialized(true);
+  }
+
   const updateCompanyMutation = useMutation({
-    mutationFn: async (data: { name: string }) => {
+    mutationFn: async (data: Partial<Company>) => {
       const response = await apiRequest("PATCH", "/api/company", data);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
       toast({
-        title: "Company Updated",
-        description: "Company profile has been saved",
+        title: "Settings Updated",
+        description: "Company settings have been saved",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update company",
+        description: "Failed to update settings",
         variant: "destructive",
       });
     },
@@ -93,6 +105,41 @@ export default function AdminSettings() {
   const handleSaveCompany = () => {
     updateCompanyMutation.mutate({ name: companyName });
   };
+
+  const handleSaveAiSettings = () => {
+    let budgetCents: number | null = null;
+    
+    if (aiBudgetLimit && aiBudgetLimit.trim() !== "") {
+      const parsed = parseFloat(aiBudgetLimit);
+      if (isNaN(parsed) || parsed < 0) {
+        toast({
+          title: "Invalid Budget",
+          description: "Please enter a valid positive number for the budget limit.",
+          variant: "destructive",
+        });
+        return;
+      }
+      budgetCents = Math.round(parsed * 100);
+    }
+    
+    updateCompanyMutation.mutate({
+      aiAssistanceEnabled: aiEnabled ? "yes" : "no",
+      aiBudgetLimitCents: budgetCents,
+    });
+  };
+
+  const formatCurrency = (cents: number | null | undefined) => {
+    if (cents == null) return "$0.00";
+    return `$${(cents / 100).toFixed(2)}`;
+  };
+
+  const aiUsagePercent = company?.aiBudgetLimitCents && company.aiUsageThisMonthCents
+    ? Math.min(100, (company.aiUsageThisMonthCents / company.aiBudgetLimitCents) * 100)
+    : 0;
+
+  const isOverBudget = company?.aiBudgetLimitCents && company.aiUsageThisMonthCents
+    ? company.aiUsageThisMonthCents >= company.aiBudgetLimitCents
+    : false;
 
   const handleRoleChange = (userId: string, role: UserRole) => {
     updateUserMutation.mutate({ userId, data: { role } });
@@ -294,20 +341,105 @@ export default function AdminSettings() {
           </TabsContent>
 
           <TabsContent value="billing">
-            <Card>
-              <CardHeader>
-                <CardTitle>Billing</CardTitle>
-                <CardDescription>
-                  Manage your subscription and billing information
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="py-8 text-center">
-                <CreditCard className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">
-                  Billing features coming soon. Contact support for billing inquiries.
-                </p>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-muted-foreground" />
+                    <CardTitle>AI Assistance</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Configure AI-powered features like call transcription and data extraction
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {companyLoading ? (
+                    <Skeleton className="h-20 w-full" />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-4 p-4 border rounded-md">
+                        <div className="flex-1">
+                          <div className="font-medium">Enable AI Assistance</div>
+                          <p className="text-sm text-muted-foreground">
+                            When enabled, AI features like automatic call transcription and data extraction are available. When disabled, all forms work manually.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={aiEnabled}
+                          onCheckedChange={setAiEnabled}
+                          data-testid="switch-ai-enabled"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-budget">Monthly AI Budget (USD)</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Set a monthly spending limit for AI features. Leave empty for unlimited.
+                        </p>
+                        <Input
+                          id="ai-budget"
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="e.g., 50 (leave empty for unlimited)"
+                          value={aiBudgetLimit}
+                          onChange={(e) => setAiBudgetLimit(e.target.value)}
+                          disabled={!aiEnabled}
+                          data-testid="input-ai-budget"
+                        />
+                      </div>
+
+                      {aiEnabled && company?.aiBudgetLimitCents && (
+                        <div className="p-4 border rounded-md space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-medium">This Month&apos;s Usage</span>
+                            <span className="text-sm">
+                              {formatCurrency(company.aiUsageThisMonthCents)} / {formatCurrency(company.aiBudgetLimitCents)}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all ${isOverBudget ? 'bg-destructive' : 'bg-primary'}`}
+                              style={{ width: `${aiUsagePercent}%` }}
+                            />
+                          </div>
+                          {isOverBudget && (
+                            <div className="flex items-center gap-2 text-sm text-destructive">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>Budget exceeded. AI features paused until next billing cycle.</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <Button
+                        onClick={handleSaveAiSettings}
+                        disabled={updateCompanyMutation.isPending}
+                        data-testid="button-save-ai-settings"
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        Save AI Settings
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Billing</CardTitle>
+                  <CardDescription>
+                    Manage your subscription and billing information
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="py-8 text-center">
+                  <CreditCard className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">
+                    Billing features coming soon. Contact support for billing inquiries.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="ctm">

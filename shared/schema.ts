@@ -39,6 +39,11 @@ export const companies = pgTable("companies", {
   ctmWebhookToken: varchar("ctm_webhook_token", { length: 64 }),
   ctmWebhookSecret: varchar("ctm_webhook_secret", { length: 255 }),
   ctmEnabled: varchar("ctm_enabled", { length: 10 }).default("no"),
+  // AI Assistance settings
+  aiAssistanceEnabled: varchar("ai_assistance_enabled", { length: 10 }).default("yes"),
+  aiBudgetLimitCents: integer("ai_budget_limit_cents"), // Monthly budget limit in cents (null = unlimited)
+  aiUsageThisMonthCents: integer("ai_usage_this_month_cents").default(0), // Current month's usage in cents
+  aiUsageResetDate: timestamp("ai_usage_reset_date"), // When to reset monthly usage counter
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
