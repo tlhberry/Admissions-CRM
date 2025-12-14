@@ -1,0 +1,106 @@
+REPLIT BUILD PROMPT
+
+HIPAA-Appropriate Authentication, RBAC, and Audit Logging
+
+Build a healthcare web app authentication system on Replit that is appropriate for handling PHI and aligns with HIPAA security requirements. Prioritize simplicity, security, and auditability.
+
+Tech Constraints
+	•	App is hosted on Replit
+	•	Use a managed authentication provider that supports:
+	•	Email + password login
+	•	Mandatory 2FA
+	•	Role-based access control
+	•	All secrets must be stored using Replit Secrets
+	•	Do not hardcode credentials or keys
+
+⸻
+
+Authentication Requirements
+	•	Require unique user accounts only
+	•	Prohibit shared logins
+	•	Login uses email + password
+	•	Enforce password rules:
+	•	Minimum 12 characters
+	•	Uppercase, lowercase, number, and symbol required
+	•	Prevent reuse of last 5 passwords
+	•	Force password reset every 90 days
+
+⸻
+
+Two-Factor Authentication (Required)
+	•	Enforce 2FA on every login
+	•	Support:
+	•	Authenticator apps (preferred)
+	•	SMS as fallback
+	•	No device trust, no bypass, no “remember this device”
+
+⸻
+
+Session Security
+	•	Auto-logout users after 15 minutes of inactivity
+	•	Immediately invalidate sessions on:
+	•	Password change
+	•	Role change
+	•	Admin logout
+	•	Disable persistent sessions and “remember me”
+
+⸻
+
+Role-Based Access Control (RBAC)
+	•	Assign a role at user creation:
+	•	Admin
+	•	Admissions
+	•	Clinical
+	•	Read-Only
+	•	Enforce RBAC on both frontend and backend
+	•	Admissions role must not access clinical notes
+	•	API routes must verify role before returning data
+
+⸻
+
+Audit Logging (Mandatory)
+	•	Create immutable audit logs stored in the database
+	•	Log the following events:
+	•	Successful logins
+	•	Failed login attempts
+	•	2FA failures
+	•	PHI record views
+	•	PHI record edits
+	•	Role changes
+	•	Each log entry must include:
+	•	User ID
+	•	Timestamp
+	•	Action type
+	•	IP address
+	•	Logs must not be editable or deletable
+
+⸻
+
+Account Protection
+	•	Lock account after 5 failed login attempts
+	•	Require admin to unlock
+	•	Alert admin of repeated failures
+
+⸻
+
+Data Security
+	•	Encrypt all traffic using TLS
+	•	Encrypt PHI at rest
+	•	Never log PHI in plaintext
+	•	Never expose PHI in client-side logs
+
+⸻
+
+Compliance Guardrails
+	•	Do not use biometrics
+	•	Do not use hardware security keys
+	•	Do not add CAPTCHA
+	•	Do not add extra verification steps beyond password + 2FA
+
+⸻
+
+Acceptance Criteria
+	•	Users cannot access PHI without authentication and role validation
+	•	All PHI access is auditable
+	•	Sessions expire correctly
+	•	System is suitable for HIPAA-regulated environments
