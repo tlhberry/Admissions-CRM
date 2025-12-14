@@ -75,9 +75,22 @@ class EmailService {
     }
   }
 
-  async sendAdmissionScheduledNotification(data: AdmissionScheduledData): Promise<boolean> {
-    if (!this.notificationEmail) {
-      console.log("Email service: NOTIFICATION_EMAIL not configured, skipping admission notification");
+  async sendAdmissionScheduledNotification(data: AdmissionScheduledData, additionalEmails?: string[]): Promise<boolean> {
+    // Collect all email recipients
+    const recipients: string[] = [];
+    
+    // Add emails from notification settings (passed in)
+    if (additionalEmails && additionalEmails.length > 0) {
+      recipients.push(...additionalEmails);
+    }
+    
+    // Add fallback NOTIFICATION_EMAIL if no other recipients
+    if (recipients.length === 0 && this.notificationEmail) {
+      recipients.push(this.notificationEmail);
+    }
+    
+    if (recipients.length === 0) {
+      console.log("Email service: No email recipients configured for scheduled notifications");
       return false;
     }
 
@@ -158,12 +171,21 @@ This notification was sent automatically by the Admissions CRM.
 </html>
     `.trim();
 
-    return this.sendEmail({
-      to: this.notificationEmail,
-      subject,
-      text,
-      html,
-    });
+    // Send to all recipients
+    console.log(`Sending admission scheduled notification to ${recipients.length} recipient(s): ${recipients.join(", ")}`);
+    
+    const results = await Promise.all(
+      recipients.map(email => 
+        this.sendEmail({
+          to: email,
+          subject,
+          text,
+          html,
+        })
+      )
+    );
+    
+    return results.some(r => r); // Return true if at least one email was sent
   }
 }
 

@@ -253,7 +253,20 @@ Return a JSON object with these fields (use null if not found, use dollar amount
 
       // Send email notification when inquiry is scheduled
       if (validatedData.stage === "scheduled" && currentInquiry?.stage !== "scheduled") {
-        // Non-blocking email send
+        // Get notification settings for the scheduled stage
+        const notificationSettings = await storage.getNotificationSettings();
+        const scheduledSetting = notificationSettings.find(s => s.stageName === "scheduled");
+        
+        // Parse email addresses from settings (comma-separated)
+        let staffEmails: string[] = [];
+        if (scheduledSetting?.enabled === "yes" && scheduledSetting.emailAddresses) {
+          staffEmails = scheduledSetting.emailAddresses
+            .split(",")
+            .map(e => e.trim())
+            .filter(e => e.length > 0 && e.includes("@"));
+        }
+        
+        // Non-blocking email send to all staff
         emailService.sendAdmissionScheduledNotification({
           clientName: inquiry.clientName || inquiry.callerName || "Unknown Client",
           phoneNumber: inquiry.phoneNumber || "Not provided",
@@ -265,7 +278,7 @@ Return a JSON object with these fields (use null if not found, use dollar amount
           insuranceProvider: inquiry.insuranceProvider || undefined,
           insurancePolicyId: inquiry.insurancePolicyId || undefined,
           schedulingNotes: inquiry.schedulingNotes || undefined,
-        }).catch(err => console.error("Failed to send scheduled notification:", err));
+        }, staffEmails).catch(err => console.error("Failed to send scheduled notification:", err));
       }
 
       res.json(inquiry);
