@@ -1,7 +1,15 @@
-# Admissions CRM for Addiction Treatment Centers
+# AdmitSimple - Admissions CRM for Addiction Treatment Centers
 
 ## Overview
-A mobile-friendly admissions CRM designed for addiction treatment centers. Features a pipeline tracking system, AI-powered call transcription, insurance verification workflow, and comprehensive analytics.
+AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment centers. Features a pipeline tracking system, AI-powered call transcription, insurance verification workflow, and comprehensive analytics.
+
+## Branding
+- **Product Name**: AdmitSimple
+- **Light Mode**: Cream/off-white background, navy text, muted red accent
+- **Dark Mode**: Deep navy background, cream text, muted red accent
+- **Typography**: Lora (serif) for headings, Inter (sans-serif) for body text
+- **Design**: Clean vintage look with no shadows, gradients, or animations
+- **Logos**: Day version (IMG_8329_1765685525841.png) and Night version (IMG_8330_1765685525842.png) in attached_assets
 
 ## Tech Stack
 - **Frontend**: React with Vite, TailwindCSS, shadcn/ui components
