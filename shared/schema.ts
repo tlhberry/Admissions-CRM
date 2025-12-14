@@ -191,6 +191,30 @@ export const inquiries = pgTable("inquiries", {
   clientResponsibility: text("client_responsibility"),
   vobCompletedAt: timestamp("vob_completed_at"),
   
+  // In-Network Benefits
+  inNetworkDeductible: varchar("in_network_deductible", { length: 100 }),
+  inNetworkDeductibleMet: varchar("in_network_deductible_met", { length: 100 }),
+  inNetworkOopMax: varchar("in_network_oop_max", { length: 100 }),
+  inNetworkOopMet: varchar("in_network_oop_met", { length: 100 }),
+  
+  // Out-of-Network Benefits
+  hasOutOfNetworkBenefits: varchar("has_out_of_network_benefits", { length: 10 }),
+  outOfNetworkDeductible: varchar("out_of_network_deductible", { length: 100 }),
+  outOfNetworkDeductibleMet: varchar("out_of_network_deductible_met", { length: 100 }),
+  outOfNetworkOopMax: varchar("out_of_network_oop_max", { length: 100 }),
+  outOfNetworkOopMet: varchar("out_of_network_oop_met", { length: 100 }),
+  
+  // Coverage Restrictions & Requirements
+  stateRestrictions: text("state_restrictions"),
+  preCertRequired: varchar("pre_cert_required", { length: 10 }),
+  preAuthRequired: varchar("pre_auth_required", { length: 10 }),
+  preCertAuthDetails: text("pre_cert_auth_details"),
+  
+  // Benefits Coverage
+  hasSubstanceUseBenefits: varchar("has_substance_use_benefits", { length: 10 }),
+  hasMentalHealthBenefits: varchar("has_mental_health_benefits", { length: 10 }),
+  benefitNotes: text("benefit_notes"),
+  
   // Quote stage
   quoteAccepted: varchar("quote_accepted", { length: 10 }),
   quoteNotes: text("quote_notes"),

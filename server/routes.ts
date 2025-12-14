@@ -17,6 +17,7 @@ import { emailService } from "./emailService";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import OpenAI from "openai";
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -88,6 +89,65 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error uploading file:", error);
       res.status(500).json({ message: "Failed to upload file" });
+    }
+  });
+
+  // VOB Document Analysis with AI
+  app.post("/api/analyze-vob", isAuthenticated, async (req: any, res) => {
+    try {
+      const { vobText } = req.body;
+      if (!vobText || vobText.trim().length === 0) {
+        return res.status(400).json({ message: "VOB text content is required" });
+      }
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const systemPrompt = `You are an expert insurance verification specialist for addiction treatment centers. Analyze the following VOB (Verification of Benefits) document and extract key insurance information.
+
+Return a JSON object with these fields (use null if not found, use dollar amounts with $ sign):
+{
+  "inNetworkDeductible": "total in-network deductible amount",
+  "inNetworkDeductibleMet": "amount of deductible already met/remaining",
+  "inNetworkOopMax": "in-network out-of-pocket maximum",
+  "inNetworkOopMet": "amount of OOP max already met/remaining",
+  "hasOutOfNetworkBenefits": "yes" or "no",
+  "outOfNetworkDeductible": "out-of-network deductible (if applicable)",
+  "outOfNetworkDeductibleMet": "amount met (if applicable)",
+  "outOfNetworkOopMax": "out-of-network OOP max (if applicable)",
+  "outOfNetworkOopMet": "amount met (if applicable)",
+  "stateRestrictions": "any state or geographic restrictions",
+  "preCertRequired": "yes" or "no",
+  "preAuthRequired": "yes" or "no",
+  "preCertAuthDetails": "details about pre-certification/authorization requirements, timelines, mandatory requirements",
+  "hasSubstanceUseBenefits": "yes" or "no",
+  "hasMentalHealthBenefits": "yes" or "no",
+  "benefitNotes": "any important notes about benefits, exclusions, or limitations",
+  "vobSummary": "brief summary of key coverage findings"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Please analyze this VOB document:\n\n${vobText}` }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 2000,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      const extractedData = JSON.parse(content);
+      res.json(extractedData);
+    } catch (error) {
+      console.error("Error analyzing VOB:", error);
+      res.status(500).json({ message: "Failed to analyze VOB document" });
     }
   });
 

@@ -1023,6 +1023,22 @@ const vobSchema = z.object({
   quotedCost: z.string().optional(),
   clientResponsibility: z.string().optional(),
   vobFileUrl: z.string().optional(),
+  inNetworkDeductible: z.string().optional(),
+  inNetworkDeductibleMet: z.string().optional(),
+  inNetworkOopMax: z.string().optional(),
+  inNetworkOopMet: z.string().optional(),
+  hasOutOfNetworkBenefits: z.string().optional(),
+  outOfNetworkDeductible: z.string().optional(),
+  outOfNetworkDeductibleMet: z.string().optional(),
+  outOfNetworkOopMax: z.string().optional(),
+  outOfNetworkOopMet: z.string().optional(),
+  stateRestrictions: z.string().optional(),
+  preCertRequired: z.string().optional(),
+  preAuthRequired: z.string().optional(),
+  preCertAuthDetails: z.string().optional(),
+  hasSubstanceUseBenefits: z.string().optional(),
+  hasMentalHealthBenefits: z.string().optional(),
+  benefitNotes: z.string().optional(),
 });
 
 function VOBForm({
@@ -1035,10 +1051,12 @@ function VOBForm({
   isPending: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{ url: string; filename: string } | null>(
     inquiry.vobFileUrl ? { url: inquiry.vobFileUrl, filename: "VOB Document" } : null
   );
   const { toast } = useToast();
+  const fileInputRef = { current: null as HTMLInputElement | null };
 
   const form = useForm({
     resolver: zodResolver(vobSchema),
@@ -1048,6 +1066,22 @@ function VOBForm({
       quotedCost: inquiry.quotedCost || "",
       clientResponsibility: inquiry.clientResponsibility || "",
       vobFileUrl: inquiry.vobFileUrl || "",
+      inNetworkDeductible: inquiry.inNetworkDeductible || "",
+      inNetworkDeductibleMet: inquiry.inNetworkDeductibleMet || "",
+      inNetworkOopMax: inquiry.inNetworkOopMax || "",
+      inNetworkOopMet: inquiry.inNetworkOopMet || "",
+      hasOutOfNetworkBenefits: inquiry.hasOutOfNetworkBenefits || "",
+      outOfNetworkDeductible: inquiry.outOfNetworkDeductible || "",
+      outOfNetworkDeductibleMet: inquiry.outOfNetworkDeductibleMet || "",
+      outOfNetworkOopMax: inquiry.outOfNetworkOopMax || "",
+      outOfNetworkOopMet: inquiry.outOfNetworkOopMet || "",
+      stateRestrictions: inquiry.stateRestrictions || "",
+      preCertRequired: inquiry.preCertRequired || "",
+      preAuthRequired: inquiry.preAuthRequired || "",
+      preCertAuthDetails: inquiry.preCertAuthDetails || "",
+      hasSubstanceUseBenefits: inquiry.hasSubstanceUseBenefits || "",
+      hasMentalHealthBenefits: inquiry.hasMentalHealthBenefits || "",
+      benefitNotes: inquiry.benefitNotes || "",
     },
   });
 
@@ -1081,6 +1115,58 @@ function VOBForm({
     }
   };
 
+  const handleAnalyzeWithAI = async () => {
+    const vobText = form.getValues("vobDetails");
+    if (!vobText || vobText.trim().length < 20) {
+      toast({ 
+        title: "More text needed", 
+        description: "Please paste the VOB document text first (at least a few sentences)",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const response = await fetch("/api/analyze-vob", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vobText }),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Analysis failed");
+      }
+
+      const data = await response.json();
+      
+      if (data.inNetworkDeductible) form.setValue("inNetworkDeductible", data.inNetworkDeductible);
+      if (data.inNetworkDeductibleMet) form.setValue("inNetworkDeductibleMet", data.inNetworkDeductibleMet);
+      if (data.inNetworkOopMax) form.setValue("inNetworkOopMax", data.inNetworkOopMax);
+      if (data.inNetworkOopMet) form.setValue("inNetworkOopMet", data.inNetworkOopMet);
+      if (data.hasOutOfNetworkBenefits) form.setValue("hasOutOfNetworkBenefits", data.hasOutOfNetworkBenefits);
+      if (data.outOfNetworkDeductible) form.setValue("outOfNetworkDeductible", data.outOfNetworkDeductible);
+      if (data.outOfNetworkDeductibleMet) form.setValue("outOfNetworkDeductibleMet", data.outOfNetworkDeductibleMet);
+      if (data.outOfNetworkOopMax) form.setValue("outOfNetworkOopMax", data.outOfNetworkOopMax);
+      if (data.outOfNetworkOopMet) form.setValue("outOfNetworkOopMet", data.outOfNetworkOopMet);
+      if (data.stateRestrictions) form.setValue("stateRestrictions", data.stateRestrictions);
+      if (data.preCertRequired) form.setValue("preCertRequired", data.preCertRequired);
+      if (data.preAuthRequired) form.setValue("preAuthRequired", data.preAuthRequired);
+      if (data.preCertAuthDetails) form.setValue("preCertAuthDetails", data.preCertAuthDetails);
+      if (data.hasSubstanceUseBenefits) form.setValue("hasSubstanceUseBenefits", data.hasSubstanceUseBenefits);
+      if (data.hasMentalHealthBenefits) form.setValue("hasMentalHealthBenefits", data.hasMentalHealthBenefits);
+      if (data.benefitNotes) form.setValue("benefitNotes", data.benefitNotes);
+      if (data.vobSummary) form.setValue("coverageDetails", data.vobSummary);
+
+      toast({ title: "Analysis complete", description: "Form fields have been filled automatically" });
+    } catch (error) {
+      toast({ title: "Analysis failed", description: "Please try again or fill manually", variant: "destructive" });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1099,17 +1185,90 @@ function VOBForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="p-4 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30">
+              <FormLabel className="text-base font-semibold">Upload VOB Document</FormLabel>
+              <p className="text-sm text-muted-foreground mb-3">Upload the VOB file, then paste the text below for AI analysis</p>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="hidden"
+                  id="vob-file-input"
+                  data-testid="input-vob-file"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={() => document.getElementById("vob-file-input")?.click()}
+                  disabled={uploading}
+                  className="w-full sm:w-auto"
+                  data-testid="button-upload-vob"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-5 h-5 mr-2" />
+                      Choose File
+                    </>
+                  )}
+                </Button>
+                {uploadedFile && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-primary" />
+                    <a 
+                      href={uploadedFile.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="hover:underline text-primary font-medium"
+                      data-testid="link-vob-file"
+                    >
+                      {uploadedFile.filename}
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <FormField
               control={form.control}
               name="vobDetails"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-base">VOB Results *</FormLabel>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <FormLabel className="text-base">VOB Results / Paste Document Text *</FormLabel>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={handleAnalyzeWithAI}
+                      disabled={analyzing}
+                      data-testid="button-analyze-ai"
+                    >
+                      {analyzing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Fill with AI
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   <FormControl>
                     <Textarea
                       {...field}
-                      placeholder="Enter verification results..."
-                      className="min-h-32"
+                      placeholder="Paste the VOB document text here, then click 'Fill with AI' to automatically extract key information..."
+                      className="min-h-40"
                       data-testid="input-vob-details"
                     />
                   </FormControl>
@@ -1118,92 +1277,294 @@ function VOBForm({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="coverageDetails"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base">Coverage Details</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      placeholder="e.g., In-network, 80% coverage, $5k deductible met..."
-                      className="min-h-24"
-                      data-testid="input-coverage-details"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid gap-6 sm:grid-cols-2">
+            <Separator />
+            <h3 className="font-semibold text-lg">In-Network Benefits</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
-                name="quotedCost"
+                name="inNetworkDeductible"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">Quoted Cost</FormLabel>
+                    <FormLabel>Deductible</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="e.g., $15,000"
-                        className="text-lg h-12"
-                        data-testid="input-quoted-cost"
-                      />
+                      <Input {...field} placeholder="e.g., $2,500" className="h-12" data-testid="input-in-deductible" />
                     </FormControl>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
-                name="clientResponsibility"
+                name="inNetworkDeductibleMet"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">Client Responsibility</FormLabel>
+                    <FormLabel>Deductible Met / Remaining</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="e.g., $3,000"
-                        className="text-lg h-12"
-                        data-testid="input-client-responsibility"
-                      />
+                      <Input {...field} placeholder="e.g., $1,000 met, $1,500 remaining" className="h-12" data-testid="input-in-deductible-met" />
                     </FormControl>
-                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="inNetworkOopMax"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Out-of-Pocket Max</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $6,000" className="h-12" data-testid="input-in-oop-max" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="inNetworkOopMet"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>OOP Met / Remaining</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $500 met, $5,500 remaining" className="h-12" data-testid="input-in-oop-met" />
+                    </FormControl>
                   </FormItem>
                 )}
               />
             </div>
 
-            <div className="space-y-2">
-              <FormLabel className="text-base">VOB Document (Optional)</FormLabel>
-              <div className="flex items-center gap-4">
-                <Input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="flex-1"
-                  data-testid="input-vob-file"
-                />
-                {uploading && <Loader2 className="w-5 h-5 animate-spin" />}
-              </div>
-              {uploadedFile && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FileText className="w-4 h-4" />
-                  <a 
-                    href={uploadedFile.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="hover:underline text-primary"
-                    data-testid="link-vob-file"
-                  >
-                    {uploadedFile.filename}
-                  </a>
-                </div>
+            <Separator />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="font-semibold text-lg">Out-of-Network Benefits</h3>
+              <FormField
+                control={form.control}
+                name="hasOutOfNetworkBenefits"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger className="w-32" data-testid="select-has-oon">
+                      <SelectValue placeholder="Has OON?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="outOfNetworkDeductible"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>OON Deductible</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $5,000" className="h-12" data-testid="input-oon-deductible" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="outOfNetworkDeductibleMet"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>OON Deductible Met / Remaining</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $0 met, $5,000 remaining" className="h-12" data-testid="input-oon-deductible-met" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="outOfNetworkOopMax"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>OON Out-of-Pocket Max</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $12,000" className="h-12" data-testid="input-oon-oop-max" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="outOfNetworkOopMet"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>OON OOP Met / Remaining</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $0 met, $12,000 remaining" className="h-12" data-testid="input-oon-oop-met" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Separator />
+            <h3 className="font-semibold text-lg">Pre-Cert / Pre-Auth Requirements</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="preCertRequired"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Pre-Certification Required?</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12" data-testid="select-precert">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="preAuthRequired"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Pre-Authorization Required?</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12" data-testid="select-preauth">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="preCertAuthDetails"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Pre-Cert/Auth Details & Mandatory Requirements</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Timeline, phone numbers, required forms, mandatory stipulations..." className="min-h-20" data-testid="input-precert-details" />
+                  </FormControl>
+                </FormItem>
               )}
+            />
+
+            <Separator />
+            <h3 className="font-semibold text-lg">Coverage & Restrictions</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="hasSubstanceUseBenefits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Substance Use Benefits?</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12" data-testid="select-sud-benefits">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="hasMentalHealthBenefits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mental Health Benefits?</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12" data-testid="select-mh-benefits">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="stateRestrictions"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State or Geographic Restrictions</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g., In-state only, excludes certain states..." className="h-12" data-testid="input-state-restrictions" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="benefitNotes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Additional Benefit Notes</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Exclusions, limitations, special conditions..." className="min-h-20" data-testid="input-benefit-notes" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            <Separator />
+            <h3 className="font-semibold text-lg">Quote Information</h3>
+            <FormField
+              control={form.control}
+              name="coverageDetails"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Coverage Summary</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Summary of coverage details..." className="min-h-20" data-testid="input-coverage-details" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="quotedCost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quoted Cost</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $15,000" className="h-12" data-testid="input-quoted-cost" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientResponsibility"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client Responsibility</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., $3,000" className="h-12" data-testid="input-client-responsibility" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </div>
 
             <Button
