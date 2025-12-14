@@ -171,11 +171,6 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold">AdmitSimple</h1>
-            {company && (
-              <span className="text-sm text-muted-foreground hidden sm:inline" data-testid="text-company-name">
-                {company.name}
-              </span>
-            )}
           </div>
           
           <div className="flex items-center gap-2">
@@ -294,7 +289,12 @@ export default function Dashboard() {
 
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold mb-2">Pipeline Overview</h2>
+          <h2 className="text-2xl md:text-3xl font-bold mb-2">
+            {company && (
+              <span data-testid="text-company-name">{company.name} </span>
+            )}
+            Pipeline Overview
+          </h2>
           <div className="text-muted-foreground">
             {isLoading ? (
               <Skeleton className="h-5 w-48" />
