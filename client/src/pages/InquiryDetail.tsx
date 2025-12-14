@@ -710,11 +710,11 @@ function InsuranceForm({
                 name="callerName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">Name (Client or Family Member) *</FormLabel>
+                    <FormLabel className="text-base">Caller Name *</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder="Client or family member calling"
+                        placeholder="Who called?"
                         className="text-lg h-12"
                         data-testid="input-caller-name"
                       />
@@ -729,11 +729,11 @@ function InsuranceForm({
                 name="clientName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">Client Name (if different)</FormLabel>
+                    <FormLabel className="text-base">Client Name</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder="Leave blank if caller is the client"
+                        placeholder="If different from caller"
                         className="text-lg h-12"
                         data-testid="input-client-name"
                       />
