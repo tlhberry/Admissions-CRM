@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -60,9 +60,23 @@ import { format } from "date-fns";
 
 export default function ReferralAccounts() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const { toast } = useToast();
   const [showAddAccount, setShowAddAccount] = useState(false);
+  const [showQuickActivity, setShowQuickActivity] = useState(false);
   const [editingAccount, setEditingAccount] = useState<ReferralAccount | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const action = params.get("action");
+    if (action === "new") {
+      setShowAddAccount(true);
+      navigate("/accounts", { replace: true });
+    } else if (action === "activity") {
+      setShowQuickActivity(true);
+      navigate("/accounts", { replace: true });
+    }
+  }, [searchString, navigate]);
 
   const { data: accounts, isLoading } = useQuery<ReferralAccount[]>({
     queryKey: ["/api/referral-accounts"],
@@ -206,6 +220,18 @@ export default function ReferralAccounts() {
               isPending={updateAccountMutation.isPending}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showQuickActivity} onOpenChange={setShowQuickActivity}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Log Activity</DialogTitle>
+          </DialogHeader>
+          <QuickActivityForm
+            accounts={accounts || []}
+            onSuccess={() => setShowQuickActivity(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>
@@ -576,6 +602,88 @@ function ActivityForm({ onSubmit, isPending }: { onSubmit: (data: Partial<Activi
       </div>
       <Button type="submit" disabled={isPending} className="w-full" data-testid="button-submit-activity">
         {isPending ? "Logging..." : "Log Activity"}
+      </Button>
+    </form>
+  );
+}
+
+function QuickActivityForm({ accounts, onSuccess }: { accounts: ReferralAccount[]; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    accountId: "",
+    activityType: "face_to_face" as ActivityType,
+    activityDate: new Date().toISOString().split("T")[0],
+    notes: "",
+  });
+
+  const createActivityMutation = useMutation({
+    mutationFn: async (data: { accountId: number; activityType: string; activityDate: Date; notes: string }) => {
+      const response = await apiRequest("POST", `/api/referral-accounts/${data.accountId}/activities`, {
+        activityType: data.activityType,
+        activityDate: data.activityDate,
+        notes: data.notes,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/referral-accounts"] });
+      toast({ title: "Activity Logged", description: "Your activity has been recorded" });
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to log activity", variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.accountId) return;
+    createActivityMutation.mutate({
+      accountId: parseInt(formData.accountId),
+      activityType: formData.activityType,
+      activityDate: new Date(formData.activityDate),
+      notes: formData.notes,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label>Account *</Label>
+        <Select value={formData.accountId} onValueChange={(v) => setFormData({ ...formData, accountId: v })}>
+          <SelectTrigger data-testid="select-quick-account">
+            <SelectValue placeholder="Select an account" />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id.toString()}>{account.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Activity Type *</Label>
+        <Select value={formData.activityType} onValueChange={(v) => setFormData({ ...formData, activityType: v as ActivityType })}>
+          <SelectTrigger data-testid="select-quick-activity-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(activityTypeDisplayNames).map(([key, label]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Date *</Label>
+        <Input type="date" value={formData.activityDate} onChange={(e) => setFormData({ ...formData, activityDate: e.target.value })} required data-testid="input-quick-activity-date" />
+      </div>
+      <div>
+        <Label>Notes</Label>
+        <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="What was discussed?" data-testid="input-quick-activity-notes" />
+      </div>
+      <Button type="submit" disabled={createActivityMutation.isPending || !formData.accountId} className="w-full" data-testid="button-submit-quick-activity">
+        {createActivityMutation.isPending ? "Logging..." : "Log Activity"}
       </Button>
     </form>
   );

@@ -28,6 +28,7 @@ import {
   LogOut,
   User,
   ChevronRight,
+  ChevronDown,
   BarChart3,
   Search,
   AlertTriangle,
@@ -36,6 +37,7 @@ import {
   Building2,
   FileBarChart,
   UserX,
+  ClipboardList,
 } from "lucide-react";
 import type { Inquiry, PipelineStage } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
@@ -150,14 +152,29 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center gap-2">
-            <Button 
-              onClick={() => navigate("/inquiry/new")}
-              data-testid="button-new-inquiry"
-              className="gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">New Inquiry</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button data-testid="button-add-new" className="gap-2">
+                  <Plus className="w-5 h-5" />
+                  <span className="hidden sm:inline">New</span>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem onClick={() => navigate("/inquiry/new")} className="cursor-pointer" data-testid="menu-new-inquiry">
+                  <Phone className="w-4 h-4 mr-2" />
+                  New Inquiry
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/accounts?action=new")} className="cursor-pointer" data-testid="menu-add-account">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Add Account
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/accounts?action=activity")} className="cursor-pointer" data-testid="menu-add-activity">
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Add Activity
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             
             <Button 
               variant="outline"
