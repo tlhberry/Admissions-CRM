@@ -233,6 +233,7 @@ export const inquiries = pgTable("inquiries", {
   // Admission
   actualAdmitDate: date("actual_admit_date"),
   admittedNotes: text("admitted_notes"),
+  arrivalEmailSentAt: timestamp("arrival_email_sent_at"),
   
   // AI Transcription
   callRecordingUrl: text("call_recording_url"),
