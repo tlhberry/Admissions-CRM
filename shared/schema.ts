@@ -24,6 +24,31 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// User roles
+export const userRoles = ["admin", "user"] as const;
+export type UserRole = typeof userRoles[number];
+
+// Companies/Tenants table
+export const companies = pgTable("companies", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull().default("Gulf Breeze"),
+  billingEmail: varchar("billing_email", { length: 255 }),
+  billingAddress: text("billing_address"),
+  billingPhone: varchar("billing_phone", { length: 50 }),
+  billingNotes: text("billing_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+
 // User storage table for Replit Auth
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -31,6 +56,9 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  companyId: integer("company_id").references(() => companies.id),
+  role: varchar("role", { length: 20 }).notNull().default("user"),
+  isActive: varchar("is_active", { length: 10 }).notNull().default("yes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -145,6 +173,7 @@ export type LevelOfCare = typeof levelsOfCare[number];
 // Main inquiries table
 export const inquiries = pgTable("inquiries", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   userId: varchar("user_id").references(() => users.id),
   
   // Stage tracking
@@ -343,6 +372,7 @@ export const accountTypeDisplayNames: Record<AccountType, string> = {
 // Referral Accounts table - BD rep assigned accounts
 export const referralAccounts = pgTable("referral_accounts", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type", { length: 50 }),
   address: text("address"),
@@ -367,6 +397,7 @@ export type InsertReferralAccount = z.infer<typeof insertReferralAccountSchema>;
 // Referral Contacts table - contacts within referral accounts
 export const referralContacts = pgTable("referral_contacts", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   accountId: integer("account_id").references(() => referralAccounts.id).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   position: varchar("position", { length: 100 }),
@@ -410,6 +441,7 @@ export const activityTypeDisplayNames: Record<ActivityType, string> = {
 // Activity Logs table - BD rep activity tracking
 export const activityLogs = pgTable("activity_logs", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   accountId: integer("account_id").references(() => referralAccounts.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   activityType: varchar("activity_type", { length: 50 }).notNull(),
@@ -429,7 +461,8 @@ export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 // Notification Settings table - admin email configuration per stage
 export const notificationSettings = pgTable("notification_settings", {
   id: serial("id").primaryKey(),
-  stageName: varchar("stage_name", { length: 50 }).notNull().unique(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  stageName: varchar("stage_name", { length: 50 }).notNull(),
   emailAddresses: text("email_addresses"),
   enabled: varchar("enabled", { length: 10 }).default("no"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -448,6 +481,7 @@ export type InsertNotificationSetting = z.infer<typeof insertNotificationSetting
 // Pre-Assessment Form 1: RB Pre-Cert / Clinical Pre-Assessment
 export const preCertForms = pgTable("pre_cert_forms", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull().unique(),
   formData: jsonb("form_data").notNull().default({}),
   isComplete: varchar("is_complete", { length: 10 }).default("no"),
@@ -469,6 +503,7 @@ export type InsertPreCertForm = z.infer<typeof insertPreCertFormSchema>;
 // Pre-Assessment Form 2: Nursing Admission Assessment
 export const nursingAssessmentForms = pgTable("nursing_assessment_forms", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull().unique(),
   formData: jsonb("form_data").notNull().default({}),
   isComplete: varchar("is_complete", { length: 10 }).default("no"),
@@ -490,6 +525,7 @@ export type InsertNursingAssessmentForm = z.infer<typeof insertNursingAssessment
 // Pre-Assessment Form 3: Pre-Screening Form
 export const preScreeningForms = pgTable("pre_screening_forms", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
   inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull().unique(),
   formData: jsonb("form_data").notNull().default({}),
   isComplete: varchar("is_complete", { length: 10 }).default("no"),
