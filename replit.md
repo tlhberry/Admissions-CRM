@@ -73,6 +73,7 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - **BD Rep Activity Tracking**: Log face-to-face visits, phone calls, meetings with referral accounts
 - **Lost Client Tracking**: Track why viable clients don't proceed to admission with reason categories (went elsewhere, ceased contact, changed mind, financial reasons, family decision, other)
 - **Reports Dashboard** (`/reports`): Admissions metrics by time period (week/month/3 months/year), referral source performance, BD rep leaderboard, face-to-face activity summary, and overall conversion rates
+- **CTM Follow-up Call Tracking**: Webhook detects repeat callers by phone number and logs follow-up calls instead of creating duplicate inquiries. Click-to-call functionality logs outbound calls. Call History section shows all inbound/outbound calls with timestamps.
 
 ## API Endpoints
 
@@ -101,6 +102,8 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - `POST /api/notification-settings` - Save notification setting
 - `POST /api/inquiries/:id/notify-staff` - Send admission scheduled notification to staff
 - `POST /api/inquiries/:id/send-arrival-email` - Send client arrival email with pre-assessment forms attached
+- `GET /api/inquiries/:id/call-logs` - Get call history for inquiry
+- `POST /api/inquiries/:id/call-logs` - Log outbound call (click-to-call)
 
 ### Public Endpoints
 - `POST /api/webhooks/ctm` - CallTrackingMetrics webhook (optionally secured with CTM_WEBHOOK_SECRET)
