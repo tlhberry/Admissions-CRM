@@ -24,6 +24,11 @@ import {
   UserCog,
   Sparkles,
   AlertCircle,
+  Lock,
+  Unlock,
+  Plus,
+  Shield,
+  Loader2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -97,6 +102,48 @@ export default function AdminSettings() {
       toast({
         title: "Error",
         description: error.message || "Failed to update user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unlockAccountMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiRequest("POST", `/api/auth/admin/unlock/${userId}`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Account Unlocked",
+        description: "The user can now log in again",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unlock account",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const changeRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: UserRole }) => {
+      const response = await apiRequest("POST", `/api/auth/admin/role/${userId}`, { role });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Role Updated",
+        description: "User role has been changed",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change role",
         variant: "destructive",
       });
     },
@@ -285,7 +332,7 @@ export default function AdminSettings() {
                     {users?.map((u) => (
                       <div
                         key={u.id}
-                        className="flex items-center justify-between gap-4 p-4 border rounded-md"
+                        className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border rounded-md"
                         data-testid={`user-row-${u.id}`}
                       >
                         <div className="flex-1 min-w-0">
@@ -299,23 +346,55 @@ export default function AdminSettings() {
                             {u.isActive === "no" && (
                               <Badge variant="secondary" className="text-xs">Inactive</Badge>
                             )}
+                            {u.lockedAt && (
+                              <Badge variant="destructive" className="text-xs">
+                                <Lock className="w-3 h-3 mr-1" />
+                                Locked
+                              </Badge>
+                            )}
+                            {u.twoFactorSetupComplete === "yes" && (
+                              <Badge variant="outline" className="text-xs">
+                                <Shield className="w-3 h-3 mr-1" />
+                                2FA
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground truncate">
                             {u.email}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {u.lockedAt && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => unlockAccountMutation.mutate(u.id)}
+                              disabled={unlockAccountMutation.isPending}
+                              data-testid={`button-unlock-${u.id}`}
+                            >
+                              {unlockAccountMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Unlock className="w-4 h-4 mr-1" />
+                                  Unlock
+                                </>
+                              )}
+                            </Button>
+                          )}
                           <Select
                             value={u.role}
-                            onValueChange={(value) => handleRoleChange(u.id, value as UserRole)}
-                            disabled={u.id === user?.id || updateUserMutation.isPending}
+                            onValueChange={(value) => changeRoleMutation.mutate({ userId: u.id, role: value as UserRole })}
+                            disabled={u.id === user?.id || changeRoleMutation.isPending}
                           >
                             <SelectTrigger className="w-28" data-testid={`select-role-${u.id}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="admissions">Admissions</SelectItem>
+                              <SelectItem value="clinical">Clinical</SelectItem>
+                              <SelectItem value="read_only">Read Only</SelectItem>
                             </SelectContent>
                           </Select>
                           <Select

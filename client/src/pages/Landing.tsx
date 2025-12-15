@@ -21,7 +21,7 @@ export default function Landing() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button asChild data-testid="button-login">
-              <a href="/api/login">Sign In</a>
+              <a href="/login">Sign In</a>
             </Button>
           </div>
         </div>
@@ -38,7 +38,7 @@ export default function Landing() {
               Track inquiries, manage pipelines, and admit more clients with less effort.
             </p>
             <Button size="lg" className="text-lg px-8" asChild data-testid="button-get-started">
-              <a href="/api/login">
+              <a href="/login">
                 Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />
               </a>
@@ -125,7 +125,7 @@ export default function Landing() {
               Your team can use it on any device without training.
             </p>
             <Button variant="outline" size="lg" asChild data-testid="button-learn-more">
-              <a href="/api/login">
+              <a href="/login">
                 Start Using Now
                 <ArrowRight className="ml-2 h-5 w-5" />
               </a>
