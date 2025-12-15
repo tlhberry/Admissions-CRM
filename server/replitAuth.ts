@@ -179,9 +179,32 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Check for custom password-based session authentication first
+  const session = req.session as any;
+  if (session?.userId && session?.authenticated) {
+    // Custom password login session - simulate the req.user structure for compatibility
+    const dbUser = await storage.getUser(session.userId);
+    if (dbUser) {
+      (req as any).user = {
+        claims: { sub: dbUser.id },
+        profile: { 
+          email: dbUser.email, 
+          firstName: dbUser.firstName,
+          lastName: dbUser.lastName 
+        }
+      };
+      // Update last activity
+      storage.updateLastActivity(session.userId).catch(err => 
+        console.error("Failed to update last activity:", err)
+      );
+      return next();
+    }
+  }
+
+  // Fall back to Replit OIDC authentication
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated() || !user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -216,14 +239,22 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
 // Role-based access control middleware - requires admin role
 export const isAdmin: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated() || !user?.claims?.sub) {
-    return res.status(401).json({ message: "Unauthorized" });
+  // Check for custom password-based session authentication first
+  const session = req.session as any;
+  let userId: string | undefined;
+  
+  if (session?.userId && session?.authenticated) {
+    userId = session.userId;
+  } else {
+    const user = req.user as any;
+    if (!req.isAuthenticated() || !user?.claims?.sub) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    userId = user.claims.sub;
   }
 
   try {
-    const dbUser = await storage.getUser(user.claims.sub);
+    const dbUser = await storage.getUser(userId);
     if (!dbUser || dbUser.role !== 'admin') {
       return res.status(403).json({ message: "Forbidden: Admin access required" });
     }
