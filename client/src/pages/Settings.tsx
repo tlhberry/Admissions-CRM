@@ -10,11 +10,14 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Settings as SettingsIcon, Mail, Bell, Save, CreditCard, MessageCircle, Loader2, CheckCircle } from "lucide-react";
+import { ArrowLeft, Settings as SettingsIcon, Mail, Bell, Save, MessageCircle, Loader2, CheckCircle, Users, UserPlus, Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { stageDisplayNames, type PipelineStage, type NotificationSetting } from "@shared/schema";
+import { stageDisplayNames, type PipelineStage, type NotificationSetting, type User } from "@shared/schema";
 import { useState, useEffect } from "react";
 import { BillingSettings } from "@/components/BillingSettings";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const notifiableStages: PipelineStage[] = [
   "vob_pending",
@@ -123,6 +126,113 @@ export default function Settings() {
     }
   };
 
+  // Team Members
+  const { data: teamMembers, isLoading: teamLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteFirstName, setInviteFirstName] = useState("");
+  const [inviteLastName, setInviteLastName] = useState("");
+  const [inviteRole, setInviteRole] = useState<string>("user");
+
+  const inviteMutation = useMutation({
+    mutationFn: async (data: { email: string; firstName: string; lastName: string; role: string }) => {
+      const response = await apiRequest("POST", "/api/auth/register/invite", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setShowInviteDialog(false);
+      setInviteEmail("");
+      setInviteFirstName("");
+      setInviteLastName("");
+      setInviteRole("user");
+      toast({
+        title: "User Invited",
+        description: "They will receive a temporary password to log in.",
+      });
+    },
+    onError: async (error: Error & { response?: Response }) => {
+      if (error.response) {
+        const data = await error.response.json();
+        toast({
+          title: "Error",
+          description: data.message || "Failed to invite user",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to invite user",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const response = await apiRequest("PATCH", `/api/users/${userId}`, { role });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Role Updated",
+        description: "User role has been changed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update role",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiRequest("PATCH", `/api/users/${userId}`, { isActive: "no" });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "User Deactivated",
+        description: "User has been deactivated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to deactivate user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleInviteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inviteEmail && inviteFirstName && inviteLastName) {
+      inviteMutation.mutate({
+        email: inviteEmail,
+        firstName: inviteFirstName,
+        lastName: inviteLastName,
+        role: inviteRole,
+      });
+    }
+  };
+
+  const roleLabels: Record<string, string> = {
+    admin: "Admin",
+    user: "User",
+    bd_rep: "BD Rep",
+    read_only: "Read Only",
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b">
@@ -149,6 +259,182 @@ export default function Settings() {
         {/* Billing Settings - Admin Only */}
         {user?.role === 'admin' && (
           <BillingSettings />
+        )}
+
+        {/* Team Members - Admin Only */}
+        {user?.role === 'admin' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Team Members
+                  </CardTitle>
+                  <CardDescription>
+                    Manage your team members and their roles.
+                  </CardDescription>
+                </div>
+                <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-add-user">
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Add User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Invite Team Member</DialogTitle>
+                      <DialogDescription>
+                        Send an invitation to a new team member. They will receive a temporary password.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleInviteSubmit} className="space-y-4 mt-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="invite-first-name">First Name</Label>
+                          <Input
+                            id="invite-first-name"
+                            value={inviteFirstName}
+                            onChange={(e) => setInviteFirstName(e.target.value)}
+                            placeholder="John"
+                            required
+                            data-testid="input-invite-first-name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="invite-last-name">Last Name</Label>
+                          <Input
+                            id="invite-last-name"
+                            value={inviteLastName}
+                            onChange={(e) => setInviteLastName(e.target.value)}
+                            placeholder="Doe"
+                            required
+                            data-testid="input-invite-last-name"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-email">Email</Label>
+                        <Input
+                          id="invite-email"
+                          type="email"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          placeholder="john@company.com"
+                          required
+                          data-testid="input-invite-email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-role">Role</Label>
+                        <Select value={inviteRole} onValueChange={setInviteRole}>
+                          <SelectTrigger data-testid="select-invite-role">
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="bd_rep">BD Rep</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="read_only">Read Only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowInviteDialog(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={inviteMutation.isPending || !inviteEmail || !inviteFirstName || !inviteLastName}
+                          data-testid="button-submit-invite"
+                        >
+                          {inviteMutation.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Inviting...
+                            </>
+                          ) : (
+                            "Send Invite"
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {teamLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : teamMembers && teamMembers.length > 0 ? (
+                <div className="space-y-3">
+                  {teamMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between gap-4 p-3 rounded-md border"
+                      data-testid={`team-member-${member.id}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">
+                          {member.firstName} {member.lastName}
+                          {member.id === user?.id && (
+                            <Badge variant="outline" className="ml-2">You</Badge>
+                          )}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {member.id === user?.id ? (
+                          <Badge>{roleLabels[member.role] || member.role}</Badge>
+                        ) : (
+                          <Select
+                            value={member.role}
+                            onValueChange={(role) => updateRoleMutation.mutate({ userId: member.id, role })}
+                            disabled={updateRoleMutation.isPending}
+                          >
+                            <SelectTrigger className="w-[120px]" data-testid={`select-role-${member.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="bd_rep">BD Rep</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="read_only">Read Only</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {member.id !== user?.id && member.isActive === "yes" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deactivateMutation.mutate(member.id)}
+                            disabled={deactivateMutation.isPending}
+                            data-testid={`button-deactivate-${member.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
+                        {member.isActive !== "yes" && (
+                          <Badge variant="secondary">Inactive</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No team members yet.</p>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <Card>
