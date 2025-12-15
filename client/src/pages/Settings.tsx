@@ -10,9 +10,10 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Settings as SettingsIcon, Mail, Bell, Save } from "lucide-react";
+import { ArrowLeft, Settings as SettingsIcon, Mail, Bell, Save, CreditCard } from "lucide-react";
 import { stageDisplayNames, type PipelineStage, type NotificationSetting } from "@shared/schema";
 import { useState, useEffect } from "react";
+import { BillingSettings } from "@/components/BillingSettings";
 
 const notifiableStages: PipelineStage[] = [
   "vob_pending",
@@ -112,6 +113,11 @@ export default function Settings() {
       </header>
 
       <main className="p-4 max-w-2xl mx-auto space-y-6">
+        {/* Billing Settings - Admin Only */}
+        {user?.role === 'admin' && (
+          <BillingSettings />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
