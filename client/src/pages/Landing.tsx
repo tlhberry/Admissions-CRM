@@ -24,7 +24,7 @@ export default function Landing() {
               <a href="/login">Sign In</a>
             </Button>
             <Button variant="outline" asChild data-testid="button-signup">
-              <a href="/login">Sign Up</a>
+              <a href="/register">Sign Up</a>
             </Button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { users, loginAttempts, auditLogs } from "@shared/schema";
+import { users, loginAttempts, auditLogs, companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import {
   validatePasswordPolicy,
@@ -72,6 +72,88 @@ async function logAuditEvent(
     userAgent: req?.headers["user-agent"]?.substring(0, 500) || null,
   });
 }
+
+// POST /api/auth/register/public - Public self-registration
+router.post("/register/public", async (req: Request, res: Response) => {
+  try {
+    const { email, password, firstName, lastName, organizationName } = req.body;
+
+    // Validate required fields
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: "Valid email is required" });
+    }
+
+    if (!firstName || !lastName) {
+      return res.status(400).json({ message: "First and last name are required" });
+    }
+
+    if (!organizationName) {
+      return res.status(400).json({ message: "Organization name is required" });
+    }
+
+    // Check if email already exists
+    const existingUser = await db.select().from(users).where(eq(users.email, email));
+    if (existingUser.length > 0) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
+    // Validate password
+    const policyResult = validatePasswordPolicy(password);
+    if (!policyResult.meetsPolicy) {
+      return res.status(400).json({ 
+        message: "Password does not meet requirements",
+        errors: policyResult.errors,
+      });
+    }
+
+    // Hash password
+    const passwordHash = await hashPassword(password);
+    const now = new Date();
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 90);
+
+    // Create a new company/organization for this user
+    const [newCompany] = await db.insert(companies).values({
+      name: organizationName,
+      isActive: "yes",
+    }).returning();
+
+    // Create user as admin of their new organization
+    const [newUser] = await db.insert(users).values({
+      email,
+      firstName,
+      lastName,
+      role: "admin",
+      companyId: newCompany.id,
+      passwordHash,
+      passwordChangedAt: now,
+      passwordExpiresAt: expiryDate,
+      mustChangePassword: "no",
+      twoFactorSetupComplete: "no",
+      isActive: "yes",
+    }).returning();
+
+    // Log audit event
+    await logAuditEvent(
+      newCompany.id,
+      newUser.id,
+      "create",
+      "user",
+      undefined,
+      `Self-registered user: ${email} as admin of ${organizationName}`,
+      req
+    );
+
+    res.status(201).json({
+      message: "Account created successfully. Please sign in to continue.",
+      userId: newUser.id,
+      email: newUser.email,
+    });
+  } catch (error) {
+    console.error("Public registration error:", error);
+    res.status(500).json({ message: "Failed to create account" });
+  }
+});
 
 // POST /api/auth/register - Register a new user (admin only)
 router.post("/register", async (req: Request, res: Response) => {

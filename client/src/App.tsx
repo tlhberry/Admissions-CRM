@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
+import Register from "@/pages/Register";
 import ChangePassword from "@/pages/ChangePassword";
 import Dashboard from "@/pages/Dashboard";
 import NewInquiry from "@/pages/NewInquiry";
@@ -39,6 +40,7 @@ function Router() {
         <>
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
+          <Route path="/register" component={Register} />
         </>
       ) : (
         <>
