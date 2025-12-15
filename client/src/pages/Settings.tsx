@@ -10,7 +10,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Settings as SettingsIcon, Mail, Bell, Save, CreditCard } from "lucide-react";
+import { ArrowLeft, Settings as SettingsIcon, Mail, Bell, Save, CreditCard, MessageCircle, Loader2, CheckCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { stageDisplayNames, type PipelineStage, type NotificationSetting } from "@shared/schema";
 import { useState, useEffect } from "react";
 import { BillingSettings } from "@/components/BillingSettings";
@@ -88,6 +89,38 @@ export default function Settings() {
         [field]: value,
       },
     }));
+  };
+
+  const [supportMessage, setSupportMessage] = useState("");
+  const [supportSuccess, setSupportSuccess] = useState(false);
+
+  const supportMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const response = await apiRequest("POST", "/api/support", { message });
+      return response.json();
+    },
+    onSuccess: () => {
+      setSupportSuccess(true);
+      setSupportMessage("");
+      toast({
+        title: "Message Sent",
+        description: "We'll get back to you soon.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSupportSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (supportMessage.trim().length >= 10) {
+      supportMutation.mutate(supportMessage);
+    }
   };
 
   return (
@@ -172,6 +205,67 @@ export default function Settings() {
                   </div>
                 );
               })
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              Contact Support
+            </CardTitle>
+            <CardDescription>
+              Need help? Send us a message and we'll get back to you.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {supportSuccess ? (
+              <div className="text-center py-6">
+                <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400 mx-auto mb-3" />
+                <p className="font-medium">Message sent!</p>
+                <p className="text-sm text-muted-foreground mt-1">We'll be in touch soon.</p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setSupportSuccess(false)}
+                  data-testid="button-send-another"
+                >
+                  Send Another Message
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleSupportSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="support-message">How can we help?</Label>
+                  <Textarea
+                    id="support-message"
+                    placeholder="Describe your question or issue..."
+                    rows={4}
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    data-testid="input-support-message"
+                  />
+                  <p className="text-xs text-muted-foreground">Minimum 10 characters</p>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={supportMutation.isPending || supportMessage.trim().length < 10}
+                  data-testid="button-submit-support"
+                >
+                  {supportMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Send Message
+                    </>
+                  )}
+                </Button>
+              </form>
             )}
           </CardContent>
         </Card>

@@ -1,16 +1,63 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Phone, 
   ClipboardCheck, 
   Shield, 
   Calendar,
-  ArrowRight
+  ArrowRight,
+  Mail,
+  Loader2,
+  CheckCircle
 } from "lucide-react";
 
 export default function Landing() {
-  
+  const [contactForm, setContactForm] = useState({
+    email: "",
+    phone: "",
+    companyName: "",
+    message: "",
+  });
+  const [contactSuccess, setContactSuccess] = useState(false);
+  const [contactError, setContactError] = useState("");
+
+  const contactMutation = useMutation({
+    mutationFn: async (data: typeof contactForm) => {
+      const response = await apiRequest("POST", "/api/contact", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      setContactSuccess(true);
+      setContactError("");
+      setContactForm({ email: "", phone: "", companyName: "", message: "" });
+    },
+    onError: (error: Error) => {
+      const errorMessage = error.message;
+      const colonIndex = errorMessage.indexOf(": ");
+      if (colonIndex > 0) {
+        try {
+          const data = JSON.parse(errorMessage.slice(colonIndex + 2));
+          setContactError(data.message || "Failed to send message");
+          return;
+        } catch {}
+      }
+      setContactError("Failed to send message. Please try again.");
+    },
+  });
+
+  const handleContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setContactError("");
+    contactMutation.mutate(contactForm);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -133,6 +180,96 @@ export default function Landing() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </a>
             </Button>
+          </div>
+        </section>
+
+        <section id="contact" className="py-16 px-4 bg-card/30">
+          <div className="container mx-auto max-w-xl">
+            <div className="text-center mb-8">
+              <h3 className="text-xl font-semibold mb-2">Questions?</h3>
+              <p className="text-muted-foreground text-sm">
+                Get in touch and we'll help you get started.
+              </p>
+            </div>
+            
+            {contactSuccess ? (
+              <div className="text-center py-8">
+                <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400 mx-auto mb-4" />
+                <p className="text-lg font-medium">Thank you for reaching out!</p>
+                <p className="text-muted-foreground text-sm mt-2">We'll be in touch soon.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleContactSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="contact-email" className="text-sm">Email</Label>
+                    <Input
+                      id="contact-email"
+                      type="email"
+                      placeholder="you@company.com"
+                      value={contactForm.email}
+                      onChange={(e) => setContactForm(f => ({ ...f, email: e.target.value }))}
+                      required
+                      data-testid="input-contact-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contact-phone" className="text-sm">Phone (optional)</Label>
+                    <Input
+                      id="contact-phone"
+                      type="tel"
+                      placeholder="(555) 123-4567"
+                      value={contactForm.phone}
+                      onChange={(e) => setContactForm(f => ({ ...f, phone: e.target.value }))}
+                      data-testid="input-contact-phone"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contact-company" className="text-sm">Organization (optional)</Label>
+                  <Input
+                    id="contact-company"
+                    placeholder="Your Treatment Center"
+                    value={contactForm.companyName}
+                    onChange={(e) => setContactForm(f => ({ ...f, companyName: e.target.value }))}
+                    data-testid="input-contact-company"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contact-message" className="text-sm">How can we help?</Label>
+                  <Textarea
+                    id="contact-message"
+                    placeholder="Tell us about your needs..."
+                    rows={3}
+                    value={contactForm.message}
+                    onChange={(e) => setContactForm(f => ({ ...f, message: e.target.value }))}
+                    required
+                    data-testid="input-contact-message"
+                  />
+                </div>
+                {contactError && (
+                  <p className="text-sm text-destructive">{contactError}</p>
+                )}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={contactMutation.isPending}
+                  data-testid="button-contact-submit"
+                >
+                  {contactMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Send Message
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
           </div>
         </section>
       </main>

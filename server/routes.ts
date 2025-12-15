@@ -291,6 +291,67 @@ export async function registerRoutes(
   // HIPAA-compliant email/password + 2FA auth routes
   app.use("/api/auth", authRoutes);
 
+  // Public contact form submission (no auth required)
+  app.post("/api/contact", async (req: Request, res: Response) => {
+    try {
+      const { email, phone, companyName, message } = req.body;
+      
+      // Validate required fields
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "Valid email is required" });
+      }
+      if (!message || message.trim().length < 10) {
+        return res.status(400).json({ message: "Please provide a message (at least 10 characters)" });
+      }
+      
+      // Store the submission
+      const submission = await storage.createContactSubmission({
+        email: email.toLowerCase().trim(),
+        phone: phone?.trim() || null,
+        companyName: companyName?.trim() || null,
+        message: message.trim(),
+        source: "landing_page",
+        userId: null,
+        status: "new",
+      });
+      
+      res.status(201).json({ message: "Thank you for your message. We'll be in touch soon!" });
+    } catch (error) {
+      console.error("Contact form error:", error);
+      res.status(500).json({ message: "Failed to submit message" });
+    }
+  });
+
+  // Authenticated support request (from within the app)
+  app.post("/api/support", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { message } = req.body;
+      
+      if (!message || message.trim().length < 10) {
+        return res.status(400).json({ message: "Please provide a message (at least 10 characters)" });
+      }
+      
+      const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
+      
+      const submission = await storage.createContactSubmission({
+        email: user?.email || "",
+        phone: null,
+        companyName: company?.name || null,
+        message: message.trim(),
+        source: "in_app_support",
+        userId: userId,
+        status: "new",
+      });
+      
+      res.status(201).json({ message: "Your support request has been submitted. We'll be in touch soon!" });
+    } catch (error) {
+      console.error("Support request error:", error);
+      res.status(500).json({ message: "Failed to submit support request" });
+    }
+  });
+
   // Auth routes (legacy Replit auth endpoints)
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {

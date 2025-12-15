@@ -15,6 +15,7 @@ import {
   billingAccounts,
   billingInvoices,
   billingEvents,
+  contactSubmissions,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -48,6 +49,8 @@ import {
   type InsertBillingInvoice,
   type BillingEvent,
   type InsertBillingEvent,
+  type ContactSubmission,
+  type InsertContactSubmission,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL, count } from "drizzle-orm";
@@ -150,6 +153,9 @@ export interface IStorage {
   // Billing Event operations
   createBillingEvent(data: InsertBillingEvent): Promise<BillingEvent>;
   getActiveUserCount(companyId: number): Promise<number>;
+  
+  // Contact Submission operations
+  createContactSubmission(data: InsertContactSubmission): Promise<ContactSubmission>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -628,6 +634,12 @@ export class DatabaseStorage implements IStorage {
         eq(users.isActive, "yes")
       ));
     return result[0]?.count || 0;
+  }
+  
+  // Contact Submission operations
+  async createContactSubmission(data: InsertContactSubmission): Promise<ContactSubmission> {
+    const [submission] = await db.insert(contactSubmissions).values(data).returning();
+    return submission;
   }
 }
 

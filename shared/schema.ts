@@ -866,6 +866,30 @@ export const insertBillingEventSchema = createInsertSchema(billingEvents).omit({
 export type BillingEvent = typeof billingEvents.$inferSelect;
 export type InsertBillingEvent = z.infer<typeof insertBillingEventSchema>;
 
+// Contact form submissions table
+export const contactSubmissions = pgTable("contact_submissions", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
+  companyName: varchar("company_name", { length: 255 }),
+  message: text("message").notNull(),
+  source: varchar("source", { length: 50 }).default("landing_page"), // landing_page, in_app_support
+  userId: varchar("user_id").references(() => users.id), // null for public submissions
+  status: varchar("status", { length: 20 }).default("new"), // new, read, resolved
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("IDX_contact_submission_status").on(table.status),
+  index("IDX_contact_submission_created").on(table.createdAt),
+]);
+
+export const insertContactSubmissionSchema = createInsertSchema(contactSubmissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContactSubmission = typeof contactSubmissions.$inferSelect;
+export type InsertContactSubmission = z.infer<typeof insertContactSubmissionSchema>;
+
 // Billing constants
 export const BILLING_PRICES = {
   monthly: {
