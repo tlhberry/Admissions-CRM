@@ -34,6 +34,7 @@ interface BillingResponse {
   billingAccount: BillingAccount;
   isConfigured: boolean;
   activeUserCount: number;
+  isOwnerExempt?: boolean;
 }
 
 function formatPriceDisplay(planType: BillingPlanType, userCount: number) {
@@ -218,7 +219,7 @@ export function BillingSettings() {
     );
   }
 
-  const { billingAccount, isConfigured, activeUserCount } = billing;
+  const { billingAccount, isConfigured, activeUserCount, isOwnerExempt } = billing;
   const isTrialing = billingAccount.status === 'trial';
   const isActive = billingAccount.status === 'active';
   const isCancelled = billingAccount.status === 'cancelled';
@@ -243,8 +244,21 @@ export function BillingSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Owner Exempt Status */}
+        {isOwnerExempt && (
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-md border border-green-200 dark:border-green-800">
+            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-green-800 dark:text-green-200">Owner Account - Complimentary Access</p>
+              <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                Your account has complimentary access to AdmitSimple. AI assistance fees still apply based on usage.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Configuration Status */}
-        {!isConfigured && (
+        {!isConfigured && !isOwnerExempt && (
           <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950 rounded-md border border-amber-200 dark:border-amber-800">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
             <div>

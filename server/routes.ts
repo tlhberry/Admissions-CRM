@@ -1699,22 +1699,39 @@ ${transcription}`;
   // BILLING ENDPOINTS (Admin only)
   // ========================
 
+  // Owner email that gets free access (only pays AI fees)
+  // Set via environment variable for security
+  const OWNER_EXEMPT_EMAIL = process.env.BILLING_EXEMPT_EMAIL || "";
+
   // Get billing account status
   app.get("/api/billing", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const companyId = await requireCompanyId(req, res);
       if (!companyId) return;
 
+      // Check if this is the owner's exempt account
+      const userEmail = req.user?.email?.toLowerCase();
+      const isOwnerExempt = userEmail === OWNER_EXEMPT_EMAIL.toLowerCase();
+
       let billingAccount = await storage.getBillingAccount(companyId);
       
       // Create trial account if doesn't exist
       if (!billingAccount) {
         const { calculateTrialEndDate } = await import("./authorizeNet");
+        // Owner gets permanent active status, others get trial
         billingAccount = await storage.createBillingAccount({
           companyId,
-          status: "trial",
-          trialStartDate: new Date(),
-          trialEndDate: calculateTrialEndDate(),
+          status: isOwnerExempt ? "active" : "trial",
+          trialStartDate: isOwnerExempt ? null : new Date(),
+          trialEndDate: isOwnerExempt ? null : calculateTrialEndDate(),
+          planType: isOwnerExempt ? "annual" : null,
+        });
+      } else if (isOwnerExempt && billingAccount.status !== "active") {
+        // Ensure owner account stays active
+        billingAccount = await storage.updateBillingAccount(billingAccount.id, {
+          status: "active",
+          planType: "annual",
+          trialEndDate: null,
         });
       }
 
@@ -1726,9 +1743,10 @@ ${transcription}`;
       const paymentConfigured = isAuthorizeNetConfigured();
 
       res.json({
-        ...billingAccount,
+        billingAccount,
         activeUserCount,
-        paymentConfigured,
+        isConfigured: paymentConfigured,
+        isOwnerExempt,
       });
     } catch (error) {
       console.error("Error fetching billing account:", error);
