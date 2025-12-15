@@ -12,6 +12,9 @@ import {
   auditLogs,
   callLogs,
   inquiryPhoneMap,
+  billingAccounts,
+  billingInvoices,
+  billingEvents,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -39,6 +42,12 @@ import {
   type InsertCallLog,
   type InquiryPhoneMap,
   type InsertInquiryPhoneMap,
+  type BillingAccount,
+  type InsertBillingAccount,
+  type BillingInvoice,
+  type InsertBillingInvoice,
+  type BillingEvent,
+  type InsertBillingEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL, count } from "drizzle-orm";
@@ -127,6 +136,20 @@ export interface IStorage {
   // Phone Map operations (for CTM duplicate detection)
   getInquiryByPhone(companyId: number, phoneE164: string): Promise<Inquiry | undefined>;
   createInquiryPhoneMap(data: InsertInquiryPhoneMap): Promise<InquiryPhoneMap>;
+  
+  // Billing Account operations
+  getBillingAccount(companyId: number): Promise<BillingAccount | undefined>;
+  createBillingAccount(data: InsertBillingAccount): Promise<BillingAccount>;
+  updateBillingAccount(companyId: number, data: Partial<InsertBillingAccount>): Promise<BillingAccount | undefined>;
+  
+  // Billing Invoice operations
+  getBillingInvoices(companyId: number): Promise<BillingInvoice[]>;
+  createBillingInvoice(data: InsertBillingInvoice): Promise<BillingInvoice>;
+  updateBillingInvoice(id: number, data: Partial<InsertBillingInvoice>): Promise<BillingInvoice | undefined>;
+  
+  // Billing Event operations
+  createBillingEvent(data: InsertBillingEvent): Promise<BillingEvent>;
+  getActiveUserCount(companyId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -549,6 +572,62 @@ export class DatabaseStorage implements IStorage {
   async createInquiryPhoneMap(data: InsertInquiryPhoneMap): Promise<InquiryPhoneMap> {
     const [mapping] = await db.insert(inquiryPhoneMap).values(data).returning();
     return mapping;
+  }
+  
+  // Billing Account operations
+  async getBillingAccount(companyId: number): Promise<BillingAccount | undefined> {
+    const [account] = await db.select().from(billingAccounts)
+      .where(eq(billingAccounts.companyId, companyId));
+    return account;
+  }
+  
+  async createBillingAccount(data: InsertBillingAccount): Promise<BillingAccount> {
+    const [account] = await db.insert(billingAccounts).values(data).returning();
+    return account;
+  }
+  
+  async updateBillingAccount(companyId: number, data: Partial<InsertBillingAccount>): Promise<BillingAccount | undefined> {
+    const [account] = await db.update(billingAccounts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(billingAccounts.companyId, companyId))
+      .returning();
+    return account;
+  }
+  
+  // Billing Invoice operations
+  async getBillingInvoices(companyId: number): Promise<BillingInvoice[]> {
+    return db.select().from(billingInvoices)
+      .where(eq(billingInvoices.companyId, companyId))
+      .orderBy(desc(billingInvoices.createdAt));
+  }
+  
+  async createBillingInvoice(data: InsertBillingInvoice): Promise<BillingInvoice> {
+    const [invoice] = await db.insert(billingInvoices).values(data).returning();
+    return invoice;
+  }
+  
+  async updateBillingInvoice(id: number, data: Partial<InsertBillingInvoice>): Promise<BillingInvoice | undefined> {
+    const [invoice] = await db.update(billingInvoices)
+      .set(data)
+      .where(eq(billingInvoices.id, id))
+      .returning();
+    return invoice;
+  }
+  
+  // Billing Event operations
+  async createBillingEvent(data: InsertBillingEvent): Promise<BillingEvent> {
+    const [event] = await db.insert(billingEvents).values(data).returning();
+    return event;
+  }
+  
+  // Get count of active users for billing
+  async getActiveUserCount(companyId: number): Promise<number> {
+    const result = await db.select({ count: count() }).from(users)
+      .where(and(
+        eq(users.companyId, companyId),
+        eq(users.isActive, "yes")
+      ));
+    return result[0]?.count || 0;
   }
 }
 

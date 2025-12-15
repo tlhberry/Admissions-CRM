@@ -717,3 +717,164 @@ export const insertInquiryPhoneMapSchema = createInsertSchema(inquiryPhoneMap).o
 
 export type InquiryPhoneMap = typeof inquiryPhoneMap.$inferSelect;
 export type InsertInquiryPhoneMap = z.infer<typeof insertInquiryPhoneMapSchema>;
+
+// ========================
+// BILLING SYSTEM TABLES
+// ========================
+
+// Billing plan types
+export const billingPlanTypes = ["monthly", "annual"] as const;
+export type BillingPlanType = typeof billingPlanTypes[number];
+
+// Billing status types
+export const billingStatuses = ["trial", "active", "past_due", "cancelled", "expired"] as const;
+export type BillingStatus = typeof billingStatuses[number];
+
+// Billing Accounts table - facility billing status and Authorize.net integration
+export const billingAccounts = pgTable("billing_accounts", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull().unique(),
+  
+  // Subscription status
+  status: varchar("status", { length: 20 }).notNull().default("trial"), // trial, active, past_due, cancelled, expired
+  planType: varchar("plan_type", { length: 20 }), // monthly, annual (null during trial)
+  
+  // Trial tracking
+  trialStartDate: timestamp("trial_start_date").defaultNow(),
+  trialEndDate: timestamp("trial_end_date"),
+  
+  // Subscription dates
+  subscriptionStartDate: timestamp("subscription_start_date"),
+  nextBillingDate: timestamp("next_billing_date"),
+  cancelledAt: timestamp("cancelled_at"),
+  
+  // Authorize.net Customer Information Manager (CIM) IDs
+  authNetCustomerProfileId: varchar("authnet_customer_profile_id", { length: 50 }),
+  authNetPaymentProfileId: varchar("authnet_payment_profile_id", { length: 50 }),
+  
+  // Authorize.net Automated Recurring Billing (ARB) IDs
+  authNetBaseSubscriptionId: varchar("authnet_base_subscription_id", { length: 50 }),
+  authNetUserSubscriptionId: varchar("authnet_user_subscription_id", { length: 50 }),
+  
+  // Payment method info (masked for display only)
+  cardLast4: varchar("card_last4", { length: 4 }),
+  cardType: varchar("card_type", { length: 20 }), // Visa, Mastercard, etc.
+  cardExpMonth: varchar("card_exp_month", { length: 2 }),
+  cardExpYear: varchar("card_exp_year", { length: 4 }),
+  
+  // Billing amounts (in cents)
+  basePriceCents: integer("base_price_cents"), // Facility base subscription
+  perUserPriceCents: integer("per_user_price_cents"), // Per active user
+  activeUserCount: integer("active_user_count").default(0),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("IDX_billing_company").on(table.companyId),
+  index("IDX_billing_status").on(table.status),
+]);
+
+export const insertBillingAccountSchema = createInsertSchema(billingAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BillingAccount = typeof billingAccounts.$inferSelect;
+export type InsertBillingAccount = z.infer<typeof insertBillingAccountSchema>;
+
+// Billing Invoices table - invoice/receipt records
+export const billingInvoices = pgTable("billing_invoices", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  billingAccountId: integer("billing_account_id").references(() => billingAccounts.id).notNull(),
+  
+  // Invoice details
+  invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
+  description: text("description"),
+  
+  // Amounts (in cents)
+  subtotalCents: integer("subtotal_cents").notNull(),
+  taxCents: integer("tax_cents").default(0),
+  totalCents: integer("total_cents").notNull(),
+  
+  // Payment status
+  status: varchar("status", { length: 20 }).notNull(), // paid, pending, failed, refunded
+  paidAt: timestamp("paid_at"),
+  
+  // Authorize.net transaction details
+  authNetTransactionId: varchar("authnet_transaction_id", { length: 50 }),
+  authNetResponseCode: varchar("authnet_response_code", { length: 10 }),
+  
+  // Billing period
+  periodStart: timestamp("period_start"),
+  periodEnd: timestamp("period_end"),
+  
+  // Line items breakdown (JSON)
+  lineItems: jsonb("line_items"), // Array of {description, quantity, unitPriceCents, totalCents}
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("IDX_invoice_company").on(table.companyId),
+  index("IDX_invoice_billing_account").on(table.billingAccountId),
+  index("IDX_invoice_status").on(table.status),
+  index("IDX_invoice_created").on(table.createdAt),
+]);
+
+export const insertBillingInvoiceSchema = createInsertSchema(billingInvoices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BillingInvoice = typeof billingInvoices.$inferSelect;
+export type InsertBillingInvoice = z.infer<typeof insertBillingInvoiceSchema>;
+
+// Billing Events table - webhook audit log for payment events
+export const billingEvents = pgTable("billing_events", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id),
+  
+  // Event details
+  eventType: varchar("event_type", { length: 50 }).notNull(), // payment_success, payment_failed, subscription_cancelled, etc.
+  eventSource: varchar("event_source", { length: 20 }).notNull(), // authorize_net, system, admin
+  
+  // Authorize.net webhook data
+  authNetTransactionId: varchar("authnet_transaction_id", { length: 50 }),
+  authNetSubscriptionId: varchar("authnet_subscription_id", { length: 50 }),
+  
+  // Raw webhook payload (for debugging)
+  rawPayload: jsonb("raw_payload"),
+  
+  // Processing status
+  processed: varchar("processed", { length: 10 }).default("no"),
+  processedAt: timestamp("processed_at"),
+  errorMessage: text("error_message"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("IDX_billing_event_company").on(table.companyId),
+  index("IDX_billing_event_type").on(table.eventType),
+  index("IDX_billing_event_transaction").on(table.authNetTransactionId),
+  index("IDX_billing_event_created").on(table.createdAt),
+]);
+
+export const insertBillingEventSchema = createInsertSchema(billingEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BillingEvent = typeof billingEvents.$inferSelect;
+export type InsertBillingEvent = z.infer<typeof insertBillingEventSchema>;
+
+// Billing constants
+export const BILLING_PRICES = {
+  monthly: {
+    baseCents: 9900, // $99/month
+    perUserCents: 2500, // $25/user/month
+  },
+  annual: {
+    baseCents: 99900, // $999/year
+    perUserCents: 25000, // $250/user/year
+  },
+  trialDays: 14,
+} as const;
