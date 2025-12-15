@@ -10,6 +10,8 @@ import {
   preScreeningForms,
   companies,
   auditLogs,
+  callLogs,
+  inquiryPhoneMap,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -33,6 +35,10 @@ import {
   type InsertCompany,
   type AuditLog,
   type InsertAuditLog,
+  type CallLog,
+  type InsertCallLog,
+  type InquiryPhoneMap,
+  type InsertInquiryPhoneMap,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL, count } from "drizzle-orm";
@@ -113,6 +119,14 @@ export interface IStorage {
   
   // HIPAA Activity Tracking
   updateLastActivity(userId: string): Promise<void>;
+  
+  // Call Log operations
+  getCallLogsByInquiry(inquiryId: number): Promise<CallLog[]>;
+  createCallLog(data: InsertCallLog): Promise<CallLog>;
+  
+  // Phone Map operations (for CTM duplicate detection)
+  getInquiryByPhone(companyId: number, phoneE164: string): Promise<Inquiry | undefined>;
+  createInquiryPhoneMap(data: InsertInquiryPhoneMap): Promise<InquiryPhoneMap>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -491,6 +505,50 @@ export class DatabaseStorage implements IStorage {
     await db.update(users)
       .set({ lastActivityAt: new Date() })
       .where(eq(users.id, userId));
+  }
+  
+  // Call Log operations
+  async getCallLogsByInquiry(inquiryId: number): Promise<CallLog[]> {
+    return db.select().from(callLogs)
+      .where(eq(callLogs.inquiryId, inquiryId))
+      .orderBy(desc(callLogs.createdAt));
+  }
+  
+  async createCallLog(data: InsertCallLog): Promise<CallLog> {
+    const [log] = await db.insert(callLogs).values(data).returning();
+    return log;
+  }
+  
+  // Phone Map operations (for CTM duplicate detection)
+  async getInquiryByPhone(companyId: number, phoneE164: string): Promise<Inquiry | undefined> {
+    // First check the phone map
+    const [phoneMapping] = await db.select().from(inquiryPhoneMap)
+      .where(and(
+        eq(inquiryPhoneMap.companyId, companyId),
+        eq(inquiryPhoneMap.phoneE164, phoneE164)
+      ))
+      .limit(1);
+    
+    if (phoneMapping) {
+      const inquiry = await this.getInquiry(phoneMapping.inquiryId, companyId);
+      return inquiry;
+    }
+    
+    // Also check direct phone number on inquiries (fallback for pre-existing data)
+    const [directInquiry] = await db.select().from(inquiries)
+      .where(and(
+        eq(inquiries.companyId, companyId),
+        eq(inquiries.phoneNumber, phoneE164)
+      ))
+      .orderBy(desc(inquiries.createdAt))
+      .limit(1);
+    
+    return directInquiry;
+  }
+  
+  async createInquiryPhoneMap(data: InsertInquiryPhoneMap): Promise<InquiryPhoneMap> {
+    const [mapping] = await db.insert(inquiryPhoneMap).values(data).returning();
+    return mapping;
   }
 }
 
