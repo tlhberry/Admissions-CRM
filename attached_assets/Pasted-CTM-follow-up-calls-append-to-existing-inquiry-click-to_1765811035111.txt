@@ -1,0 +1,121 @@
+CTM follow up calls append to existing inquiry + click-to-call logs outbound
+Rule: Do not change any existing features, pipeline stages, UI layout, database tables, or the current “first call creates inquiry” logic. Only add the smallest changes needed to support the behavior below.
+
+What we want
+
+If a patient calls again later and their phone number already belongs to an existing inquiry, do not create a new inquiry. Instead, append a call log entry to the existing inquiry.
+
+If staff clicks the patient phone number inside the inquiry, it opens the dialer and logs an outbound call touch to that inquiry.
+
+Add: Call Log storage
+
+Add a new table/collection called call_logs:
+
+id
+
+inquiry_id
+
+phone_e164
+
+direction (inbound or outbound)
+
+timestamp (store server time)
+
+source (ctm or app_click)
+
+ctm_call_id (nullable, unique if present)
+
+No other required fields in this first version.
+
+Phone matching
+
+Create a small helper to normalize numbers to E.164 (phone_e164) and use it consistently.
+
+If the inquiry already stores a phone number, normalize it for matching.
+If it does not, store a mapping without changing existing tables by creating inquiry_phone_map:
+
+inquiry_id
+
+phone_e164 (unique)
+
+Whenever an inquiry is created by CTM (existing flow), also upsert into inquiry_phone_map.
+
+CTM inbound handling change (only to prevent duplicates)
+
+In the CTM webhook handler (or wherever CTM calls are processed):
+
+When a CTM call event arrives:
+
+Extract caller number, normalize to phone_e164.
+
+Look up an existing inquiry by phone_e164 (using existing inquiry phone field if present, otherwise inquiry_phone_map).
+
+If inquiry exists:
+
+Do NOT create a new inquiry.
+
+Create a call_logs row:
+
+inquiry_id = found inquiry
+
+phone_e164
+
+direction = inbound
+
+timestamp = now()
+
+source = ctm
+
+ctm_call_id = CTM call id if available
+
+Deduplicate by ctm_call_id if present (do nothing if already logged).
+
+If no inquiry exists:
+
+Keep current behavior exactly as-is (create new inquiry).
+
+After creation, upsert inquiry_phone_map for that inquiry.
+
+Also write the first inbound call_logs entry for that new inquiry.
+
+Click-to-call outbound logging
+
+In the Inquiry detail view:
+
+Render the phone number as a tel: link.
+
+On click, create a call_logs entry BEFORE navigating:
+
+inquiry_id
+
+phone_e164
+
+direction = outbound
+
+timestamp = now()
+
+source = app_click
+
+No modal, no outcomes, no notes in this first version.
+
+Display inside inquiry
+
+In the inquiry detail page ONLY, add a small read-only section called Call Log showing:
+
+timestamp
+
+inbound/outbound
+
+source
+
+Newest first.
+
+Acceptance check
+
+First ever call creates inquiry (unchanged).
+
+Any later call from same number does NOT create a new inquiry.
+
+Later calls append time entries to the existing inquiry call log.
+
+Clicking the phone number logs an outbound call touch.

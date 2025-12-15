@@ -648,3 +648,72 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// Phone number normalization helper - converts to E.164 format
+export function normalizePhoneE164(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  // Strip all non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 0) return null;
+  // If 10 digits (US), prepend +1
+  if (digits.length === 10) return `+1${digits}`;
+  // If 11 digits starting with 1, prepend +
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  // Otherwise just return with + prefix
+  return `+${digits}`;
+}
+
+// Call direction enum
+export const callDirections = ["inbound", "outbound"] as const;
+export type CallDirection = typeof callDirections[number];
+
+// Call source enum  
+export const callSources = ["ctm", "app_click", "manual"] as const;
+export type CallSource = typeof callSources[number];
+
+// Call Logs table - tracks all inbound/outbound calls for an inquiry
+export const callLogs = pgTable("call_logs", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull(),
+  phoneE164: varchar("phone_e164", { length: 20 }).notNull(),
+  direction: varchar("direction", { length: 10 }).notNull(), // inbound/outbound
+  source: varchar("source", { length: 20 }).notNull(), // ctm/app_click/manual
+  ctmCallId: varchar("ctm_call_id", { length: 100 }),
+  durationSeconds: integer("duration_seconds"),
+  recordingUrl: text("recording_url"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_call_logs_inquiry").on(table.inquiryId),
+  index("IDX_call_logs_phone").on(table.phoneE164),
+  index("IDX_call_logs_ctm").on(table.ctmCallId),
+]);
+
+export const insertCallLogSchema = createInsertSchema(callLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CallLog = typeof callLogs.$inferSelect;
+export type InsertCallLog = z.infer<typeof insertCallLogSchema>;
+
+// Inquiry Phone Map table - maps phone numbers to inquiries for deduplication
+export const inquiryPhoneMap = pgTable("inquiry_phone_map", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull(),
+  phoneE164: varchar("phone_e164", { length: 20 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_phone_map_phone").on(table.phoneE164),
+  index("IDX_phone_map_inquiry").on(table.inquiryId),
+]);
+
+export const insertInquiryPhoneMapSchema = createInsertSchema(inquiryPhoneMap).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InquiryPhoneMap = typeof inquiryPhoneMap.$inferSelect;
+export type InsertInquiryPhoneMap = z.infer<typeof insertInquiryPhoneMapSchema>;
