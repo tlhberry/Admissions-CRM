@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { users, loginAttempts, auditLogs, companies } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import {
   validatePasswordPolicy,
   hashPassword,
@@ -73,14 +73,45 @@ async function logAuditEvent(
   });
 }
 
+// List of blocked free email providers
+const BLOCKED_EMAIL_DOMAINS = [
+  "gmail.com", "googlemail.com",
+  "yahoo.com", "yahoo.co.uk", "ymail.com",
+  "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com", "msn.com",
+  "aol.com",
+  "icloud.com", "me.com", "mac.com",
+  "protonmail.com", "proton.me",
+  "mail.com", "email.com",
+  "zoho.com",
+  "yandex.com", "yandex.ru",
+  "gmx.com", "gmx.net",
+  "fastmail.com",
+  "tutanota.com",
+  "inbox.com",
+  "mail.ru",
+];
+
 // POST /api/auth/register/public - Public self-registration
 router.post("/register/public", async (req: Request, res: Response) => {
   try {
-    const { email, password, firstName, lastName, organizationName } = req.body;
+    const { email: rawEmail, password, firstName, lastName, organizationName } = req.body;
 
     // Validate required fields
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       return res.status(400).json({ message: "Valid email is required" });
+    }
+
+    // Normalize email to lowercase for consistent storage and comparison
+    const email = rawEmail.toLowerCase().trim();
+    
+    // Extract email domain
+    const emailDomain = email.split("@")[1];
+
+    // Block free email providers - require company email
+    if (BLOCKED_EMAIL_DOMAINS.includes(emailDomain)) {
+      return res.status(400).json({ 
+        message: "Please use your company email address. Personal email addresses like Gmail, Yahoo, or Hotmail are not allowed." 
+      });
     }
 
     if (!firstName || !lastName) {
@@ -92,9 +123,17 @@ router.post("/register/public", async (req: Request, res: Response) => {
     }
 
     // Check if email already exists
-    const existingUser = await db.select().from(users).where(eq(users.email, email));
+    const existingUser = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
     if (existingUser.length > 0) {
       return res.status(400).json({ message: "Email already registered" });
+    }
+
+    // Check if someone from the same organization (same email domain) already registered
+    const existingOrgUser = await db.select().from(users).where(ilike(users.email, `%@${emailDomain}`));
+    if (existingOrgUser.length > 0) {
+      return res.status(400).json({ 
+        message: "Your organization already has an account. Please contact support@admitsimple.com for help accessing your organization's account." 
+      });
     }
 
     // Validate password
@@ -232,11 +271,14 @@ router.post("/register", async (req: Request, res: Response) => {
 // POST /api/auth/login - Step 1: Validate credentials
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email: rawEmail, password } = req.body;
 
-    if (!email || !password) {
+    if (!rawEmail || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
+
+    // Normalize email to lowercase for consistent comparison
+    const email = rawEmail.toLowerCase().trim();
 
     // Find user
     const [user] = await db.select().from(users).where(eq(users.email, email));

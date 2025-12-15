@@ -66,17 +66,25 @@ export default function Register() {
       setError(null);
       setSuccess(true);
     },
-    onError: async (error: Error & { response?: Response }) => {
-      if (error.response) {
-        const data = await error.response.json();
-        if (data.errors && Array.isArray(data.errors)) {
-          setError(data.errors.join(". "));
-        } else {
-          setError(data.message || "Registration failed");
+    onError: (error: Error) => {
+      // Error message format is "status: json_response"
+      const errorMessage = error.message;
+      const colonIndex = errorMessage.indexOf(": ");
+      if (colonIndex > 0) {
+        const jsonPart = errorMessage.slice(colonIndex + 2);
+        try {
+          const data = JSON.parse(jsonPart);
+          if (data.errors && Array.isArray(data.errors)) {
+            setError(data.errors.join(". "));
+          } else {
+            setError(data.message || "Registration failed");
+          }
+          return;
+        } catch {
+          // Not JSON, use as-is
         }
-      } else {
-        setError("Unable to connect. Please try again.");
       }
+      setError(errorMessage || "Registration failed. Please try again.");
     },
   });
 
