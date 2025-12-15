@@ -1695,6 +1695,292 @@ ${transcription}`;
     }
   });
 
+  // ========================
+  // BILLING ENDPOINTS (Admin only)
+  // ========================
+
+  // Get billing account status
+  app.get("/api/billing", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      let billingAccount = await storage.getBillingAccount(companyId);
+      
+      // Create trial account if doesn't exist
+      if (!billingAccount) {
+        const { calculateTrialEndDate } = await import("./authorizeNet");
+        billingAccount = await storage.createBillingAccount({
+          companyId,
+          status: "trial",
+          trialStartDate: new Date(),
+          trialEndDate: calculateTrialEndDate(),
+        });
+      }
+
+      // Get active user count
+      const activeUserCount = await storage.getActiveUserCount(companyId);
+
+      // Check if Authorize.net is configured
+      const { isAuthorizeNetConfigured } = await import("./authorizeNet");
+      const paymentConfigured = isAuthorizeNetConfigured();
+
+      res.json({
+        ...billingAccount,
+        activeUserCount,
+        paymentConfigured,
+      });
+    } catch (error) {
+      console.error("Error fetching billing account:", error);
+      res.status(500).json({ message: "Failed to fetch billing account" });
+    }
+  });
+
+  // Get Accept Hosted form token for payment method
+  app.post("/api/billing/payment-form-token", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const billingAccount = await storage.getBillingAccount(companyId);
+      const { getAcceptHostedFormToken, isAuthorizeNetConfigured } = await import("./authorizeNet");
+
+      if (!isAuthorizeNetConfigured()) {
+        return res.status(400).json({ message: "Payment system not configured" });
+      }
+
+      const baseUrl = req.headers.origin || `https://${req.headers.host}`;
+      
+      const result = await getAcceptHostedFormToken({
+        customerId: companyId.toString(),
+        customerEmail: company.billingEmail || "billing@example.com",
+        returnUrl: `${baseUrl}/settings?payment=success`,
+        cancelUrl: `${baseUrl}/settings?payment=cancelled`,
+        existingCustomerProfileId: billingAccount?.authNetCustomerProfileId || undefined,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error getting payment form token:", error);
+      res.status(500).json({ message: "Failed to get payment form" });
+    }
+  });
+
+  // Start or update subscription
+  app.post("/api/billing/subscribe", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const { planType } = req.body;
+      if (!planType || !["monthly", "annual"].includes(planType)) {
+        return res.status(400).json({ message: "Invalid plan type" });
+      }
+
+      const billingAccount = await storage.getBillingAccount(companyId);
+      if (!billingAccount) {
+        return res.status(400).json({ message: "Billing account not found" });
+      }
+
+      if (!billingAccount.authNetCustomerProfileId || !billingAccount.authNetPaymentProfileId) {
+        return res.status(400).json({ message: "Please add a payment method first" });
+      }
+
+      const { createSubscription, isAuthorizeNetConfigured } = await import("./authorizeNet");
+      
+      if (!isAuthorizeNetConfigured()) {
+        return res.status(400).json({ message: "Payment system not configured" });
+      }
+
+      const activeUserCount = await storage.getActiveUserCount(companyId);
+
+      const result = await createSubscription({
+        customerProfileId: billingAccount.authNetCustomerProfileId,
+        paymentProfileId: billingAccount.authNetPaymentProfileId,
+        planType,
+        activeUserCount,
+        companyId,
+      });
+
+      // Calculate next billing date
+      const nextBillingDate = new Date();
+      if (planType === "monthly") {
+        nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+      } else {
+        nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
+      }
+
+      // Update billing account
+      const updatedAccount = await storage.updateBillingAccount(companyId, {
+        status: "active",
+        planType,
+        subscriptionStartDate: new Date(),
+        nextBillingDate,
+        authNetBaseSubscriptionId: result.subscriptionId,
+        activeUserCount,
+        basePriceCents: planType === "monthly" ? 9900 : 99900,
+        perUserPriceCents: planType === "monthly" ? 2500 : 25000,
+      });
+
+      // Log billing event
+      await storage.createBillingEvent({
+        companyId,
+        eventType: "subscription_created",
+        eventSource: "admin",
+        authNetSubscriptionId: result.subscriptionId,
+        rawPayload: { planType, activeUserCount, amountDollars: result.amountDollars },
+        processed: "yes",
+        processedAt: new Date(),
+      });
+
+      res.json(updatedAccount);
+    } catch (error) {
+      console.error("Error creating subscription:", error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create subscription" });
+    }
+  });
+
+  // Cancel subscription
+  app.post("/api/billing/cancel", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const billingAccount = await storage.getBillingAccount(companyId);
+      if (!billingAccount) {
+        return res.status(400).json({ message: "Billing account not found" });
+      }
+
+      if (billingAccount.status !== "active") {
+        return res.status(400).json({ message: "No active subscription to cancel" });
+      }
+
+      const { cancelSubscription, isAuthorizeNetConfigured } = await import("./authorizeNet");
+
+      if (isAuthorizeNetConfigured() && billingAccount.authNetBaseSubscriptionId) {
+        await cancelSubscription(billingAccount.authNetBaseSubscriptionId);
+      }
+
+      // Update billing account
+      const updatedAccount = await storage.updateBillingAccount(companyId, {
+        status: "cancelled",
+        cancelledAt: new Date(),
+      });
+
+      // Log billing event
+      await storage.createBillingEvent({
+        companyId,
+        eventType: "subscription_cancelled",
+        eventSource: "admin",
+        authNetSubscriptionId: billingAccount.authNetBaseSubscriptionId,
+        processed: "yes",
+        processedAt: new Date(),
+      });
+
+      res.json(updatedAccount);
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      res.status(500).json({ message: "Failed to cancel subscription" });
+    }
+  });
+
+  // Get billing invoices
+  app.get("/api/billing/invoices", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const invoices = await storage.getBillingInvoices(companyId);
+      res.json(invoices);
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      res.status(500).json({ message: "Failed to fetch invoices" });
+    }
+  });
+
+  // Update payment method callback (called after Accept Hosted success)
+  app.post("/api/billing/payment-method-updated", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const { customerProfileId, paymentProfileId, cardLast4, cardType, cardExpMonth, cardExpYear } = req.body;
+
+      const updatedAccount = await storage.updateBillingAccount(companyId, {
+        authNetCustomerProfileId: customerProfileId,
+        authNetPaymentProfileId: paymentProfileId,
+        cardLast4,
+        cardType,
+        cardExpMonth,
+        cardExpYear,
+      });
+
+      // Log billing event
+      await storage.createBillingEvent({
+        companyId,
+        eventType: "payment_method_updated",
+        eventSource: "admin",
+        processed: "yes",
+        processedAt: new Date(),
+      });
+
+      res.json(updatedAccount);
+    } catch (error) {
+      console.error("Error updating payment method:", error);
+      res.status(500).json({ message: "Failed to update payment method" });
+    }
+  });
+
+  // Authorize.net Webhook endpoint (public, validated by signature)
+  app.post("/api/webhooks/authorize-net", async (req, res) => {
+    try {
+      const signature = req.headers["x-anet-signature"] as string;
+      const payload = JSON.stringify(req.body);
+
+      const { validateWebhookSignature } = await import("./authorizeNet");
+      
+      if (!validateWebhookSignature(payload, signature || "")) {
+        console.error("Invalid Authorize.net webhook signature");
+        return res.status(401).json({ message: "Invalid signature" });
+      }
+
+      const eventType = req.body.eventType;
+      const webhookData = req.body.payload;
+
+      console.log(`Authorize.net webhook received: ${eventType}`);
+
+      // Log the event
+      await storage.createBillingEvent({
+        companyId: null, // Will be populated if we can identify the company
+        eventType,
+        eventSource: "authorize_net",
+        authNetTransactionId: webhookData?.id || null,
+        authNetSubscriptionId: webhookData?.subscriptionId || null,
+        rawPayload: req.body,
+        processed: "no",
+      });
+
+      // Handle specific event types
+      if (eventType === "net.authorize.payment.authcapture.created") {
+        // Payment successful - could update invoice status
+        console.log("Payment successful:", webhookData?.id);
+      } else if (eventType === "net.authorize.payment.fraud.declined") {
+        // Payment declined
+        console.log("Payment declined:", webhookData?.id);
+      }
+
+      res.status(200).json({ received: true });
+    } catch (error) {
+      console.error("Error processing Authorize.net webhook:", error);
+      res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
+
   return httpServer;
 }
 
