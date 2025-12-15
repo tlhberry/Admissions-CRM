@@ -1146,18 +1146,24 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       }
       
       // Always log the call (both new and follow-up calls)
-      const callLog = await storage.createCallLog({
-        inquiryId: inquiry.id,
-        companyId: company.id,
-        direction: "inbound",
-        phoneNumber: phoneNumber || null,
-        durationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
-        recordingUrl: callRecordingUrl,
-        ctmCallId: ctmCallId?.toString() || null,
-        notes: isFollowUpCall ? "Follow-up call from CTM" : "Initial call from CTM",
-      });
-      
-      console.log(`CTM webhook: Created call log #${callLog.id} for inquiry #${inquiry.id}`);
+      let callLog;
+      try {
+        callLog = await storage.createCallLog({
+          inquiryId: inquiry.id,
+          companyId: company.id,
+          direction: "inbound",
+          phoneE164: phoneE164 || phoneNumber || 'unknown',
+          source: "ctm",
+          durationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
+          recordingUrl: callRecordingUrl,
+          ctmCallId: ctmCallId?.toString() || null,
+          notes: isFollowUpCall ? "Follow-up call from CTM" : "Initial call from CTM",
+        });
+        console.log(`CTM webhook: Created call log #${callLog.id} for inquiry #${inquiry.id}`);
+      } catch (callLogError) {
+        console.error(`CTM webhook: Failed to create call log for inquiry #${inquiry.id}:`, callLogError);
+        callLog = { id: null };
+      }
       
       // Trigger auto-transcription if recording URL is available AND AI is enabled
       // This runs asynchronously so the webhook responds quickly

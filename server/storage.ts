@@ -543,8 +543,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(callLogs.createdAt));
   }
   
-  async createCallLog(data: InsertCallLog): Promise<CallLog> {
-    const [log] = await db.insert(callLogs).values(data).returning();
+  async createCallLog(data: InsertCallLog & { phoneNumber?: string | null }): Promise<CallLog> {
+    const safeData = {
+      ...data,
+      phoneE164: data.phoneE164 ?? (data as any).phoneNumber ?? 'unknown',
+      source: data.source ?? 'ctm',
+    };
+    delete (safeData as any).phoneNumber;
+    const [log] = await db.insert(callLogs).values(safeData).returning();
     return log;
   }
   
