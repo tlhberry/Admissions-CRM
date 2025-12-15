@@ -144,6 +144,22 @@ export const loginAttempts = pgTable("login_attempts", {
   index("IDX_login_attempts_created").on(table.createdAt),
 ]);
 
+// Password reset tokens table
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_password_reset_token").on(table.token),
+  index("IDX_password_reset_email").on(table.email),
+]);
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 // Pipeline stages enum (inquiry goes directly to vob_pending)
 export const pipelineStages = [
   "inquiry",
