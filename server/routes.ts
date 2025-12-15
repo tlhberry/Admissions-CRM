@@ -26,6 +26,7 @@ import {
   insertNursingAssessmentFormSchema,
   insertPreScreeningFormSchema,
   type User,
+  normalizePhoneE164,
 } from "@shared/schema";
 import { z } from "zod";
 import { emailService } from "./emailService";
@@ -949,25 +950,67 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         callData.city || callData.state ? `Location: ${[callData.city, callData.state].filter(Boolean).join(", ")}` : null,
       ].filter(Boolean).join("\n");
 
-      const inquiry = await storage.createInquiry({
-        callerName,
-        phoneNumber,
-        referralSource,
-        referralDetails,
-        initialNotes,
-        stage: "inquiry",
-        ctmCallId: ctmCallId?.toString() || null,
-        ctmTrackingNumber,
-        callDurationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
-        callRecordingUrl,
-        ctmSource,
+      // Normalize phone number to E.164 format for duplicate detection
+      const phoneE164 = normalizePhoneE164(phoneNumber);
+      
+      // Check if we already have an inquiry for this phone number
+      let inquiry;
+      let isFollowUpCall = false;
+      
+      if (phoneE164) {
+        const existingInquiry = await storage.getInquiryByPhone(company.id, phoneE164);
+        if (existingInquiry) {
+          // This is a follow-up call - log it and update the existing inquiry
+          inquiry = existingInquiry;
+          isFollowUpCall = true;
+          console.log(`CTM webhook: Follow-up call detected for inquiry #${inquiry.id} from ${phoneNumber}`);
+        }
+      }
+      
+      if (!isFollowUpCall) {
+        // New caller - create a new inquiry
+        inquiry = await storage.createInquiry({
+          callerName,
+          phoneNumber,
+          referralSource,
+          referralDetails,
+          initialNotes,
+          stage: "inquiry",
+          ctmCallId: ctmCallId?.toString() || null,
+          ctmTrackingNumber,
+          callDurationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
+          callRecordingUrl,
+          ctmSource,
+          companyId: company.id,
+          referralOrigin: isPaidCampaign ? "online" : null,
+          onlineSource: isPaidCampaign ? "google_ppc" : null,
+        });
+        
+        // Create phone mapping for future duplicate detection
+        if (phoneE164) {
+          await storage.createInquiryPhoneMap({
+            inquiryId: inquiry.id,
+            companyId: company.id,
+            phoneE164,
+          });
+        }
+        
+        console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber} (company: ${company.name})`);
+      }
+      
+      // Always log the call (both new and follow-up calls)
+      const callLog = await storage.createCallLog({
+        inquiryId: inquiry.id,
         companyId: company.id,
-        // Auto-set referral origin for paid campaigns
-        referralOrigin: isPaidCampaign ? "online" : null,
-        onlineSource: isPaidCampaign ? "google_ppc" : null,
+        direction: "inbound",
+        phoneNumber: phoneNumber || null,
+        durationSeconds: callDuration ? parseInt(callDuration.toString(), 10) : null,
+        recordingUrl: callRecordingUrl,
+        ctmCallId: ctmCallId?.toString() || null,
+        notes: isFollowUpCall ? "Follow-up call from CTM" : "Initial call from CTM",
       });
-
-      console.log(`CTM webhook: Created inquiry #${inquiry.id} for caller ${phoneNumber} (company: ${company.name})`);
+      
+      console.log(`CTM webhook: Created call log #${callLog.id} for inquiry #${inquiry.id}`);
       
       // Trigger auto-transcription if recording URL is available AND AI is enabled
       // This runs asynchronously so the webhook responds quickly
@@ -988,7 +1031,11 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       res.status(201).json({ 
         success: true, 
         inquiryId: inquiry.id,
-        message: "Inquiry created from CTM webhook",
+        callLogId: callLog.id,
+        isFollowUpCall,
+        message: isFollowUpCall 
+          ? "Follow-up call logged to existing inquiry" 
+          : "New inquiry created from CTM webhook",
         caller: phoneNumber,
         autoTranscriptionTriggered,
       });
