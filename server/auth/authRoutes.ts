@@ -351,21 +351,8 @@ router.post("/login", async (req: Request, res: Response) => {
       }
     }
 
-    // Password is valid - check if 2FA is required
+    // Password is valid - check if 2FA is enabled (optional)
     const twoFAStatus = await get2FAStatus(user.id);
-
-    if (!twoFAStatus.setupComplete) {
-      // 2FA not set up - require setup before login
-      // Create temporary session for 2FA setup
-      (req.session as any).pendingUserId = user.id;
-      (req.session as any).pending2FASetup = true;
-
-      return res.status(200).json({
-        message: "2FA setup required",
-        requiresTwoFactorSetup: true,
-        userId: user.id,
-      });
-    }
 
     if (twoFAStatus.anyEnabled) {
       // 2FA is enabled - require verification
@@ -380,9 +367,42 @@ router.post("/login", async (req: Request, res: Response) => {
       });
     }
 
-    // No 2FA - should not happen in HIPAA mode, but handle gracefully
-    return res.status(403).json({ 
-      message: "Two-factor authentication must be set up before login" 
+    // No 2FA enabled - complete login directly
+    await db.update(users).set({
+      failedLoginAttempts: 0,
+      lastLoginAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(users.id, user.id));
+
+    // Set authenticated session
+    (req.session as any).userId = user.id;
+    (req.session as any).authenticated = true;
+
+    // Log successful login
+    await logLoginAttempt(email, user.id, true, undefined, req);
+
+    // Log audit event
+    if (user.companyId) {
+      await logAuditEvent(
+        user.companyId,
+        user.id,
+        "login",
+        "user",
+        undefined,
+        "Successful login",
+        req
+      );
+    }
+
+    return res.json({
+      message: "Login successful",
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
     });
 
   } catch (error) {
