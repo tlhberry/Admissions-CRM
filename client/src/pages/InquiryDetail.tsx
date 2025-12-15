@@ -56,8 +56,10 @@ import {
   Mail,
   Wand2,
   Sparkles,
+  PhoneOutgoing,
+  PhoneIncoming,
 } from "lucide-react";
-import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource } from "@shared/schema";
+import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource, CallLog } from "@shared/schema";
 import {
   stageDisplayNames,
   nonViableReasons,
@@ -113,6 +115,12 @@ export default function InquiryDetail() {
 
   const { data: referralAccounts } = useQuery<ReferralAccount[]>({
     queryKey: ["/api/referral-accounts"],
+  });
+
+  // Fetch call logs for this inquiry
+  const { data: callLogs, isLoading: callLogsLoading, isError: callLogsError } = useQuery<CallLog[]>({
+    queryKey: ["/api/inquiries", id, "call-logs"],
+    enabled: !!id,
   });
 
   // Helper to get referral source display
@@ -200,6 +208,33 @@ export default function InquiryDetail() {
       toast({ title: "Error", description: error.message || "Failed to create account", variant: "destructive" });
     },
   });
+
+  // Log outbound call (click-to-call)
+  const logOutboundCallMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/inquiries/${id}/call-logs`, {});
+      return response.json() as Promise<CallLog>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inquiries", id, "call-logs"] });
+      toast({ title: "Call Logged", description: "Outbound call logged successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to log call", variant: "destructive" });
+    },
+  });
+
+  // Handle click-to-call - logs call and opens phone dialer
+  const handleCallClick = async () => {
+    if (inquiry?.phoneNumber) {
+      try {
+        await logOutboundCallMutation.mutateAsync();
+        window.location.href = `tel:${inquiry.phoneNumber}`;
+      } catch (error) {
+        // Error toast is handled by mutation's onError
+      }
+    }
+  };
 
   const handleNonViable = (reason: NonViableReason, notes: string) => {
     updateMutation.mutate({
@@ -405,7 +440,23 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Phone</p>
-                <p className="font-medium">{inquiry.phoneNumber || "—"}</p>
+                {inquiry.phoneNumber ? (
+                  <button
+                    onClick={handleCallClick}
+                    disabled={logOutboundCallMutation.isPending}
+                    className="font-medium text-primary hover-elevate flex items-center gap-1 rounded px-1 -mx-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="button-call-phone"
+                  >
+                    {logOutboundCallMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Phone className="w-4 h-4" />
+                    )}
+                    {inquiry.phoneNumber}
+                  </button>
+                ) : (
+                  <p className="font-medium">—</p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Referral Source</p>
@@ -579,6 +630,53 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                   </div>
                 </>
               )}
+              {/* Call History Section */}
+              <>
+                <Separator className="sm:col-span-2" />
+                <div className="sm:col-span-2 pt-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-3">Call History</p>
+                  {callLogsLoading && (
+                    <p className="text-sm text-muted-foreground">Loading call history...</p>
+                  )}
+                  {callLogsError && (
+                    <p className="text-sm text-destructive">Failed to load call history</p>
+                  )}
+                  {!callLogsLoading && !callLogsError && (!callLogs || callLogs.length === 0) && (
+                    <p className="text-sm text-muted-foreground">No call history yet</p>
+                  )}
+                  {callLogs && callLogs.length > 0 && (
+                    <div className="space-y-2">
+                      {callLogs.map((log) => (
+                        <div 
+                          key={log.id} 
+                          className="flex items-center gap-3 text-sm"
+                          data-testid={`call-log-${log.id}`}
+                        >
+                          {log.direction === "inbound" ? (
+                            <PhoneIncoming className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <PhoneOutgoing className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          )}
+                          <span className="font-medium">
+                            {log.direction === "inbound" ? "Inbound" : "Outbound"}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {log.callTimestamp 
+                              ? format(new Date(log.callTimestamp), "MMM d, yyyy 'at' h:mm a")
+                              : "—"
+                            }
+                          </span>
+                          {log.durationSeconds && (
+                            <span className="text-muted-foreground">
+                              ({log.durationSeconds}s)
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             </div>
           </CardContent>
         </Card>

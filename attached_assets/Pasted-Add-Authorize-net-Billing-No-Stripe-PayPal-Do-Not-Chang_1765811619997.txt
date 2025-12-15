@@ -1,0 +1,257 @@
+Add Authorize.net Billing (No Stripe/PayPal). Do Not Change Anything Else.
+
+Critical rule: Do not refactor or alter any existing app features, pipeline logic, CTM integration, UI layouts, auth, or database tables. Only add the billing capability described below, and keep it isolated in a new Billing module + a Settings page section.
+
+Goal
+
+Add facility-level billing to support:
+
+14-day free trial
+
+Facility base subscription ($99/mo or $999/yr)
+
+Per active user billing ($25/user/mo or $250/user/yr)
+
+Invoices/receipts list
+
+Cancel anytime
+
+Admin-only access to billing settings
+
+Payment Provider
+
+Use Authorize.net:
+
+Use Accept Hosted (preferred) or Accept.js (acceptable) so the app does not handle card numbers. 
+Authorize.net Developer Center
++2
+Authorize.net Developer Center
++2
+
+Use Customer Profiles (CIM) to store payment method references. 
+Authorize.net Developer Center
++1
+
+Use ARB recurring billing to create/cancel subscriptions. 
+Authorize.net Developer Center
++1
+
+Use Authorize.net Webhooks to sync subscription/payment events to the app. 
+Authorize.net Developer Center
++1
+
+Secrets (Replit Secrets)
+
+Store only in Replit Secrets:
+
+AUTHORIZE_NET_API_LOGIN_ID
+
+AUTHORIZE_NET_TRANSACTION_KEY
+
+AUTHORIZE_NET_ENV = sandbox or production
+
+AUTHORIZE_NET_SIGNATURE_KEY (for webhook verification if used)
+Never hardcode secrets.
+
+1) Database Additions (New Tables Only)
+
+Add new tables/collections. Do not modify existing ones.
+
+billing_accounts
+
+id
+
+facility_id (unique)
+
+status (trialing | active | past_due | canceled)
+
+trial_start_at
+
+trial_end_at
+
+plan_interval (monthly | annual)
+
+base_price_cents (9900 or 99900)
+
+per_user_price_cents (2500 or 25000 annual equivalent stored separately)
+
+authorize_customer_profile_id (nullable)
+
+authorize_payment_profile_id (nullable)
+
+authorize_subscription_id (nullable)
+
+current_period_start
+
+current_period_end
+
+created_at, updated_at
+
+billing_invoices
+
+id
+
+facility_id
+
+period_start
+
+period_end
+
+amount_cents
+
+currency (USD)
+
+line_items_json (base fee + user seats)
+
+authorize_transaction_id (nullable)
+
+status (paid | failed | refunded)
+
+created_at
+
+billing_events (for webhook/audit)
+
+id
+
+facility_id
+
+event_type
+
+payload_json
+
+created_at
+
+2) Billing Rules
+Trial
+
+Every new facility starts trialing for 14 days automatically.
+
+No payment method required during trial.
+
+On trial end: lock only billing-gated features if needed, or show “Upgrade to continue” screen. Do not break access unexpectedly, but prevent further use until payment is added.
+
+Seat counting
+
+“Active users” = users with status active in the facility.
+
+Billing recalculates seats at renewal (simple) OR immediately with proration (optional).
+
+Keep v1 simple: bill seat count at renewal.
+
+Charges
+
+At renewal:
+
+Amount = base fee + (active_user_count × per_user_fee)
+
+3) Settings UI (Admin Only)
+
+Add a new Settings tab/section: Settings → Billing
+
+Show:
+
+Trial status + trial end date
+
+Current plan (Monthly / Annual)
+
+Facility base price
+
+Active user count and per-user price
+
+Next billing date
+
+Billing status (Active/Past due/Canceled)
+
+Buttons:
+
+“Add/Update Payment Method”
+
+“Switch to Annual (save 2 months)”
+
+“Switch to Monthly”
+
+“Cancel Subscription”
+
+Payment method capture
+
+Implement payment method update using:
+
+Accept Hosted iFrame/redirect flow (preferred). 
+Authorize.net Developer Center
++1
+
+OR
+
+Accept.js tokenization (acceptable). 
+Authorize.net Developer Center
++1
+
+Store only the Authorize.net profile IDs in billing_accounts.
+
+4) Subscription Creation (ARB)
+
+When admin upgrades (or adds card during trial):
+
+Create/ensure Authorize.net Customer Profile and Payment Profile (CIM). 
+Authorize.net Developer Center
++1
+
+Create an ARB subscription using the chosen interval and calculated amount. 
+Authorize.net Developer Center
++1
+
+Save authorize_subscription_id and set status active.
+
+Set current_period_start/end.
+
+Cancellation:
+
+Cancel ARB subscription
+
+Set status canceled at end of period (or immediately if you want)
+
+5) Webhooks (Keep Simple)
+
+Create endpoint: /api/webhooks/authorize-net
+
+Subscribe to relevant events:
+
+subscription created/updated/canceled
+
+payment succeeded/failed
+
+chargebacks if available
+
+On webhook:
+
+Verify authenticity using Authorize.net webhook guidance (best effort).
+
+Store payload in billing_events.
+
+Update billing_accounts.status and create billing_invoices rows when payments succeed/fail. 
+Authorize.net Developer Center
++1
+
+Deduplicate events by an id in payload if present.
+
+6) Don’t Change Anything Else
+
+Do not change pipeline screens
+
+Do not change CTM logic
+
+Do not change existing DB tables
+
+Only add Billing module + Settings → Billing UI + webhook endpoint
+
+Acceptance Criteria
+
+Admin can start trial automatically with no card
+
+Admin can add card and activate plan
+
+Monthly/annual plans work
+
+Renewal creates invoice records
+
+Cancel works

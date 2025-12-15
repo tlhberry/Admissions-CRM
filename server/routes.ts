@@ -618,6 +618,92 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     }
   });
 
+  // Call logs for an inquiry - get call history
+  app.get("/api/inquiries/:id/call-logs", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid inquiry ID" });
+      }
+
+      // Verify inquiry exists and belongs to company
+      const inquiry = await storage.getInquiry(id, companyId);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
+
+      const callLogs = await storage.getCallLogsByInquiry(id);
+      res.json(callLogs);
+    } catch (error) {
+      console.error("Error fetching call logs:", error);
+      res.status(500).json({ message: "Failed to fetch call logs" });
+    }
+  });
+
+  // Log an outbound call (click-to-call)
+  const callLogSchema = z.object({
+    notes: z.string().optional().nullable(),
+  });
+
+  app.post("/api/inquiries/:id/call-logs", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid inquiry ID" });
+      }
+
+      // Validate request body
+      const validatedBody = callLogSchema.parse(req.body || {});
+
+      // Verify inquiry exists and belongs to company
+      const inquiry = await storage.getInquiry(id, companyId);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
+
+      // Require phone number to log a call
+      if (!inquiry.phoneNumber) {
+        return res.status(400).json({ message: "Cannot log call - inquiry has no phone number" });
+      }
+
+      // Prevent duplicate outbound logs within 5 seconds (simple throttle)
+      const existingLogs = await storage.getCallLogsByInquiry(id);
+      const now = Date.now();
+      const recentOutbound = existingLogs.find(log => 
+        log.direction === "outbound" && 
+        log.callTimestamp && 
+        (now - new Date(log.callTimestamp).getTime()) < 5000
+      );
+      if (recentOutbound) {
+        return res.status(429).json({ message: "Call already logged recently" });
+      }
+
+      const userId = req.user?.claims?.sub;
+      const callLog = await storage.createCallLog({
+        inquiryId: id,
+        direction: "outbound",
+        phoneNumber: inquiry.phoneNumber,
+        callTimestamp: new Date(),
+        userId: userId || null,
+        notes: validatedBody.notes || null,
+      });
+
+      res.status(201).json(callLog);
+    } catch (error) {
+      console.error("Error creating call log:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create call log" });
+    }
+  });
+
   // Manual staff notification endpoint - sends email to all staff about new admission
   app.post("/api/inquiries/:id/notify-staff", isAuthenticated, async (req: any, res) => {
     try {
