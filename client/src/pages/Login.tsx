@@ -78,12 +78,11 @@ export default function Login() {
         handleLoginSuccess(data);
       }
     },
-    onError: async (error: Error & { response?: Response }) => {
-      if (error.response) {
-        const data = await error.response.json();
-        setError(data.message || "Login failed");
-        if (data.remainingAttempts !== undefined) {
-          setRemainingAttempts(data.remainingAttempts);
+    onError: async (error: Error & { status?: number; data?: any }) => {
+      if (error.data) {
+        setError(error.data.message || "Login failed");
+        if (error.data.remainingAttempts !== undefined) {
+          setRemainingAttempts(error.data.remainingAttempts);
         }
       } else {
         setError("Unable to connect. Please try again.");
@@ -99,10 +98,9 @@ export default function Login() {
     onSuccess: (data) => {
       handleLoginSuccess(data);
     },
-    onError: async (error: Error & { response?: Response }) => {
-      if (error.response) {
-        const data = await error.response.json();
-        setError(data.message || "Verification failed");
+    onError: async (error: Error & { status?: number; data?: any }) => {
+      if (error.data) {
+        setError(error.data.message || "Verification failed");
       } else {
         setError("Unable to verify. Please try again.");
       }
@@ -119,10 +117,9 @@ export default function Login() {
       setSetupData(data);
       setStep("2fa-setup");
     },
-    onError: async (error: Error & { response?: Response }) => {
-      if (error.response) {
-        const data = await error.response.json();
-        setError(data.message || "Failed to start 2FA setup");
+    onError: async (error: Error & { status?: number; data?: any }) => {
+      if (error.data) {
+        setError(error.data.message || "Failed to start 2FA setup");
       } else {
         setError("Unable to start 2FA setup. Please try again.");
       }
@@ -137,10 +134,9 @@ export default function Login() {
     onSuccess: (data) => {
       handleLoginSuccess(data);
     },
-    onError: async (error: Error & { response?: Response }) => {
-      if (error.response) {
-        const data = await error.response.json();
-        setError(data.message || "Setup verification failed");
+    onError: async (error: Error & { status?: number; data?: any }) => {
+      if (error.data) {
+        setError(error.data.message || "Setup verification failed");
       } else {
         setError("Unable to complete setup. Please try again.");
       }
