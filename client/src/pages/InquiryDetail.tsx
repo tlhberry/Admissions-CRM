@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -108,6 +109,7 @@ export default function InquiryDetail() {
   const [referralSearch, setReferralSearch] = useState("");
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
+  const [presentingProblemsText, setPresentingProblemsText] = useState("");
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
@@ -122,6 +124,13 @@ export default function InquiryDetail() {
     queryKey: ["/api/inquiries", id, "call-logs"],
     enabled: !!id,
   });
+
+  // Sync presenting problems text when inquiry loads
+  useEffect(() => {
+    if (inquiry?.presentingProblems !== undefined) {
+      setPresentingProblemsText(inquiry.presentingProblems || "");
+    }
+  }, [inquiry?.presentingProblems]);
 
   // Helper to get referral source display
   const getReferralSourceDisplay = () => {
@@ -677,6 +686,85 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                   )}
                 </div>
               </>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Treatment Type & Presenting Problems Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Treatment Information</CardTitle>
+            <CardDescription>Select treatment types and document presenting problems</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <p className="text-sm font-medium mb-3">Seeking Treatment For</p>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="sud-treatment"
+                    checked={inquiry.seekingSudTreatment === "yes"}
+                    onCheckedChange={(checked) => {
+                      updateMutation.mutate({ seekingSudTreatment: checked ? "yes" : "no" });
+                    }}
+                    data-testid="checkbox-sud-treatment"
+                  />
+                  <label
+                    htmlFor="sud-treatment"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    SUD Treatment
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="mental-health"
+                    checked={inquiry.seekingMentalHealth === "yes"}
+                    onCheckedChange={(checked) => {
+                      updateMutation.mutate({ seekingMentalHealth: checked ? "yes" : "no" });
+                    }}
+                    data-testid="checkbox-mental-health"
+                  />
+                  <label
+                    htmlFor="mental-health"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Mental Health
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="eating-disorder"
+                    checked={inquiry.seekingEatingDisorder === "yes"}
+                    onCheckedChange={(checked) => {
+                      updateMutation.mutate({ seekingEatingDisorder: checked ? "yes" : "no" });
+                    }}
+                    data-testid="checkbox-eating-disorder"
+                  />
+                  <label
+                    htmlFor="eating-disorder"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Eating Disorder
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <p className="text-sm font-medium mb-2">Presenting Problems</p>
+              <Textarea
+                placeholder="Document the client's presenting problems, concerns, and initial assessment notes..."
+                value={presentingProblemsText}
+                onChange={(e) => setPresentingProblemsText(e.target.value)}
+                onBlur={() => {
+                  if (presentingProblemsText !== (inquiry.presentingProblems || "")) {
+                    updateMutation.mutate({ presentingProblems: presentingProblemsText });
+                  }
+                }}
+                className="min-h-[100px]"
+                data-testid="textarea-presenting-problems"
+              />
             </div>
           </CardContent>
         </Card>

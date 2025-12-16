@@ -287,6 +287,14 @@ export const inquiries = pgTable("inquiries", {
   referralSource: varchar("referral_source", { length: 50 }), // legacy field for backward compatibility
   referralDetails: text("referral_details"),
   
+  // Treatment type seeking
+  seekingSudTreatment: varchar("seeking_sud_treatment", { length: 10 }), // "yes" or "no"
+  seekingMentalHealth: varchar("seeking_mental_health", { length: 10 }), // "yes" or "no"
+  seekingEatingDisorder: varchar("seeking_eating_disorder", { length: 10 }), // "yes" or "no"
+  
+  // Presenting problems / initial notes
+  presentingProblems: text("presenting_problems"),
+  
   // Initial call info
   callDateTime: timestamp("call_date_time").defaultNow(),
   initialNotes: text("initial_notes"),
