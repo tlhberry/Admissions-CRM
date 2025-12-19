@@ -406,7 +406,7 @@ export default function Dashboard() {
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
                   {isLoading ? (
                     <>
                       <Skeleton className="h-16 w-full" />
@@ -417,7 +417,7 @@ export default function Dashboard() {
                       No inquiries at this stage
                     </p>
                   ) : (
-                    stageInquiries.slice(0, 5).map((inquiry) => {
+                    stageInquiries.map((inquiry) => {
                       const complete = isStageComplete(inquiry);
                       return (
                         <button
@@ -454,11 +454,6 @@ export default function Dashboard() {
                       );
                     })
                   )}
-                  {!isLoading && stageInquiries.length > 5 && (
-                    <p className="text-sm text-muted-foreground text-center pt-2">
-                      +{stageInquiries.length - 5} more
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             );
@@ -480,7 +475,7 @@ export default function Dashboard() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="max-h-[400px] overflow-y-auto">
               {isLoading ? (
                 <Skeleton className="h-16 w-full" />
               ) : admittedCount === 0 ? (
@@ -502,7 +497,6 @@ export default function Dashboard() {
                       const bDate = b.actualAdmitDate ? new Date(b.actualAdmitDate).getTime() : 0;
                       return bDate - aDate;
                     })
-                    .slice(0, 5)
                     .map((inquiry) => {
                       const emailSent = !!inquiry.arrivalEmailSentAt;
                       return (
@@ -565,7 +559,7 @@ export default function Dashboard() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="max-h-[400px] overflow-y-auto">
               {isLoading ? (
                 <Skeleton className="h-16 w-full" />
               ) : nonViableCount === 0 ? (
@@ -574,7 +568,7 @@ export default function Dashboard() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {getInquiriesByStage("non_viable").slice(0, 3).map((inquiry) => (
+                  {getInquiriesByStage("non_viable").map((inquiry) => (
                     <button
                       key={inquiry.id}
                       onClick={() => navigate(`/inquiry/${inquiry.id}`)}
