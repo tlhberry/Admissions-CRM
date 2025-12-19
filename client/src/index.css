@@ -292,3 +292,45 @@
     inset: -1px;
   }
 }
+
+/* Custom Scrollbar Styling - Navy theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(220 35% 35%);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: hsl(220 35% 18%);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(220 35% 35%);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(220 35% 45%);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary)) hsl(var(--muted));
+}
+
+.dark * {
+  scrollbar-color: hsl(220 35% 35%) hsl(220 35% 18%);
+}
