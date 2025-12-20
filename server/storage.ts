@@ -16,6 +16,8 @@ import {
   billingInvoices,
   billingEvents,
   contactSubmissions,
+  inquiryStageStatus,
+  stageEditLogs,
   type User,
   type UpsertUser,
   type Inquiry,
@@ -51,6 +53,10 @@ import {
   type InsertBillingEvent,
   type ContactSubmission,
   type InsertContactSubmission,
+  type InquiryStageStatus,
+  type InsertInquiryStageStatus,
+  type StageEditLog,
+  type InsertStageEditLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, ilike, or, SQL, count } from "drizzle-orm";
@@ -156,6 +162,15 @@ export interface IStorage {
   
   // Contact Submission operations
   createContactSubmission(data: InsertContactSubmission): Promise<ContactSubmission>;
+  
+  // Stage Status operations
+  getStageStatusByInquiry(inquiryId: number): Promise<InquiryStageStatus[]>;
+  getStageStatus(inquiryId: number, stageName: string): Promise<InquiryStageStatus | undefined>;
+  upsertStageStatus(data: InsertInquiryStageStatus): Promise<InquiryStageStatus>;
+  
+  // Stage Edit Log operations
+  createStageEditLog(data: InsertStageEditLog): Promise<StageEditLog>;
+  getStageEditLogs(inquiryId: number, limit?: number): Promise<StageEditLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -646,6 +661,47 @@ export class DatabaseStorage implements IStorage {
   async createContactSubmission(data: InsertContactSubmission): Promise<ContactSubmission> {
     const [submission] = await db.insert(contactSubmissions).values(data).returning();
     return submission;
+  }
+  
+  // Stage Status operations
+  async getStageStatusByInquiry(inquiryId: number): Promise<InquiryStageStatus[]> {
+    return db.select().from(inquiryStageStatus)
+      .where(eq(inquiryStageStatus.inquiryId, inquiryId));
+  }
+  
+  async getStageStatus(inquiryId: number, stageName: string): Promise<InquiryStageStatus | undefined> {
+    const [status] = await db.select().from(inquiryStageStatus)
+      .where(and(
+        eq(inquiryStageStatus.inquiryId, inquiryId),
+        eq(inquiryStageStatus.stageName, stageName)
+      ));
+    return status;
+  }
+  
+  async upsertStageStatus(data: InsertInquiryStageStatus): Promise<InquiryStageStatus> {
+    const existing = await this.getStageStatus(data.inquiryId, data.stageName);
+    if (existing) {
+      const [updated] = await db.update(inquiryStageStatus)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(inquiryStageStatus.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(inquiryStageStatus).values(data).returning();
+    return created;
+  }
+  
+  // Stage Edit Log operations
+  async createStageEditLog(data: InsertStageEditLog): Promise<StageEditLog> {
+    const [log] = await db.insert(stageEditLogs).values(data).returning();
+    return log;
+  }
+  
+  async getStageEditLogs(inquiryId: number, limit: number = 50): Promise<StageEditLog[]> {
+    return db.select().from(stageEditLogs)
+      .where(eq(stageEditLogs.inquiryId, inquiryId))
+      .orderBy(desc(stageEditLogs.editedAt))
+      .limit(limit);
   }
 }
 
