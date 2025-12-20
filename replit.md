@@ -74,6 +74,14 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - **Lost Client Tracking**: Track why viable clients don't proceed to admission with reason categories (went elsewhere, ceased contact, changed mind, financial reasons, family decision, other)
 - **Reports Dashboard** (`/reports`): Admissions metrics by time period (week/month/3 months/year), referral source performance, BD rep leaderboard, face-to-face activity summary, and overall conversion rates
 - **CTM Follow-up Call Tracking**: Webhook detects repeat callers by phone number and logs follow-up calls instead of creating duplicate inquiries. Click-to-call functionality logs outbound calls. Call History section shows all inbound/outbound calls with timestamps.
+- **Stage Navigator**: Visual admission progress tracker on inquiry detail page showing completion status for each stage (Inquiry → VOB Pending → Quote Client → Pre-Assessment → Scheduled → Admitted). Collapsible UI with stage icons and completion badges.
+- **Document Download**: Download All Documents button on admitted inquiries generates a ZIP file containing:
+  - Face Sheet PDF (client info, insurance, clinical notes)
+  - Pre-Certification Form PDF (if complete)
+  - Nursing Assessment PDF (if complete)
+  - Pre-Screening Form PDF (if complete)
+  - Audit logged for HIPAA compliance
+- **Stage Status Tracking**: Database tables (`inquiry_stage_status`, `stage_edit_logs`) for tracking completion status per stage with edit history and timestamps
 
 ## API Endpoints
 
@@ -104,6 +112,11 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - `POST /api/inquiries/:id/send-arrival-email` - Send client arrival email with pre-assessment forms attached
 - `GET /api/inquiries/:id/call-logs` - Get call history for inquiry
 - `POST /api/inquiries/:id/call-logs` - Log outbound call (click-to-call)
+- `GET /api/inquiries/:id/stage-status` - Get all stage statuses for inquiry
+- `GET /api/inquiries/:id/stage-status/:stageName` - Get specific stage status
+- `PUT /api/inquiries/:id/stage-status/:stageName` - Update stage status and data
+- `GET /api/inquiries/:id/stage-edit-logs` - Get stage edit history
+- `GET /api/inquiries/:id/download-docs` - Download all documents as ZIP
 
 ### Public Endpoints
 - `POST /api/webhooks/ctm` - CallTrackingMetrics webhook (optionally secured with CTM_WEBHOOK_SECRET)
