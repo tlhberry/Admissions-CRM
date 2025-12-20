@@ -1,0 +1,91 @@
+You are working in my existing Replit app “admitsimple”.
+Do NOT change any data, wording, or clinical logic.
+Your ONLY task is to fix PDF layout, pagination, and rendering for the Final Admissions PDF Report.
+
+Current critical problems (must be fixed)
+1. The PDF is generating 12 pages when the content only requires 3–4 pages.
+2. Footer text (Page X of Y and CONFIDENTIAL - Protected Health Information) is being rendered as standalone pages, not footers.
+3. Page numbering is incorrect because footers are being treated as content.
+4. Text contains broken characters (example: T�Boned instead of T-boned).
+5. Sections are overly narrow and wrapped due to layout/container issues.
+6. Signature block creates orphan pages with underscores only.
+
+REQUIRED FIX: PDF RENDERING STRATEGY
+You must switch to a single-pass PDF render with true footers, not content-based footers.
+
+REQUIRED APPROACH (choose ONE based on existing stack)
+
+Option A (Preferred): HTML → Puppeteer PDF
+If Puppeteer is available or installable:
+
+1. Render the admissions report as one clean HTML document
+2. Use Puppeteer page.pdf() with:
+{
+  format: "Letter",
+  printBackground: true,
+  displayHeaderFooter: true,
+  margin: {
+    top: "0.75in",
+    bottom: "0.75in",
+    left: "0.75in",
+    right: "0.75in"
+  },
+  footerTemplate: `
+    <div style="font-size:9px; width:100%; padding:0 40px; display:flex; justify-content:space-between;">
+      <span>CONFIDENTIAL - Protected Health Information</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+    </div>
+  `,
+  headerTemplate: `<div></div>`
+}
+
+3. DO NOT render footers as HTML content inside the page body.
+4. Ensure the footer appears automatically on every page without creating new pages.
+
+Option B: PDFKit / ReportLab Canvas Footer
+If using a PDF library instead of HTML:
+
+1. Render the entire report as one continuous document flow
+2. Add footers using a per-page callback (canvas/page hook)
+3. Footer must be drawn at the bottom margin on every page
+4. DO NOT append footer text as Flowables or content blocks
+
+TEXT SANITIZATION (MANDATORY)
+Before rendering the PDF, sanitize all strings:
+- Replace smart quotes with straight quotes
+- Replace em dashes / en dashes with "-"
+- Replace any non-ASCII characters
+- Specifically fix: T�Boned → T-boned
+If sanitization fails, fallback to stripping unsupported characters.
+
+LAYOUT RULES (MANDATORY)
+- Single-column layout only
+- Full-width content
+- No tables exceeding page width
+- Substance Use History table must use fixed layout and wrap text normally
+- Prevent orphaned headers: never allow a section header to appear alone at page bottom
+- Signature block must stay attached to the prior section, not forced to a new page
+
+PAGE COUNT EXPECTATION
+For Inquiry 19:
+- Total pages should be 3 or 4 max
+- No blank pages
+- No pages containing only footer text
+
+ACCEPTANCE CHECKLIST (MUST PASS)
+- PDF downloads correctly on iPhone Safari
+- No extra blank pages
+- Footer appears on every page, not as content
+- Page numbers match actual pages
+- No broken characters anywhere
+- Content remains unchanged
+- Report is suitable for insurance upload and UM review
+
+DO NOT
+- Do not change wording
+- Do not summarize or shorten
+- Do not add new clinical claims
+- Do not remove sections
+- Do not redesign UI
+
+Fix formatting only, then test with Inquiry ID 19.
