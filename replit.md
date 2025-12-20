@@ -81,6 +81,22 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
   - Nursing Assessment PDF (if complete)
   - Pre-Screening Form PDF (if complete)
   - Audit logged for HIPAA compliance
+- **Admissions PDF Report**: Comprehensive single-PDF clinical summary for utilization review, containing:
+  - Facility header with date and inquiry ID
+  - Patient and caller information
+  - Insurance and coverage details
+  - Referral source and reason for call
+  - Presenting problems and current risks
+  - Substance use history table (substance, first use, frequency, amount, route, last use)
+  - Withdrawal risk assessment with clinical impression
+  - Treatment history and failed lower level supports
+  - Medical and psychiatric history with nursing vitals
+  - Psychosocial assessment and functional impairment
+  - Legal status and external stressors
+  - Level of care recommendation with medical necessity summary
+  - Initial treatment focus bullet list
+  - Sign-off block with signature lines
+  - Page numbers and confidential PHI footer
 - **Stage Status Tracking**: Database tables (`inquiry_stage_status`, `stage_edit_logs`) for tracking completion status per stage with edit history and timestamps
 
 ## API Endpoints
@@ -117,6 +133,7 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - `PUT /api/inquiries/:id/stage-status/:stageName` - Update stage status and data
 - `GET /api/inquiries/:id/stage-edit-logs` - Get stage edit history
 - `GET /api/inquiries/:id/download-docs` - Download all documents as ZIP
+- `GET /api/inquiries/:id/admissions-report.pdf` - Generate comprehensive admissions PDF report for utilization review
 
 ### Public Endpoints
 - `POST /api/webhooks/ctm` - CallTrackingMetrics webhook (optionally secured with CTM_WEBHOOK_SECRET)
