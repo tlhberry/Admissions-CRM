@@ -25,9 +25,14 @@ import {
   insertPreCertFormSchema,
   insertNursingAssessmentFormSchema,
   insertPreScreeningFormSchema,
+  insertInquiryStageStatusSchema,
+  stageOrder,
+  stageDisplayNames,
   type User,
   normalizePhoneE164,
 } from "@shared/schema";
+import PDFDocument from "pdfkit";
+import archiver from "archiver";
 import { z } from "zod";
 import { emailService } from "./emailService";
 import multer from "multer";
@@ -1781,6 +1786,193 @@ ${transcription}`;
   });
 
   // ========================
+  // STAGE STATUS ENDPOINTS
+  // ========================
+
+  // Get all stage statuses for an inquiry
+  app.get("/api/inquiries/:id/stage-status", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      // Verify inquiry belongs to company
+      const inquiry = await storage.getInquiry(inquiryId, companyId);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      const statuses = await storage.getStageStatusByInquiry(inquiryId);
+      res.json(statuses);
+    } catch (error) {
+      console.error("Error fetching stage statuses:", error);
+      res.status(500).json({ message: "Failed to fetch stage statuses" });
+    }
+  });
+
+  // Get specific stage status
+  app.get("/api/inquiries/:id/stage-status/:stageName", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      const stageName = req.params.stageName;
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      // Verify inquiry belongs to company
+      const inquiry = await storage.getInquiry(inquiryId, companyId);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      const status = await storage.getStageStatus(inquiryId, stageName);
+      res.json(status || null);
+    } catch (error) {
+      console.error("Error fetching stage status:", error);
+      res.status(500).json({ message: "Failed to fetch stage status" });
+    }
+  });
+
+  // Update stage status and data
+  app.put("/api/inquiries/:id/stage-status/:stageName", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      const stageName = req.params.stageName;
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const userId = req.user.claims.sub;
+      
+      // Verify inquiry belongs to company
+      const inquiry = await storage.getInquiry(inquiryId, companyId);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      const validatedData = insertInquiryStageStatusSchema.parse({
+        companyId,
+        inquiryId,
+        stageName,
+        status: req.body.status || "in_progress",
+        stageData: req.body.stageData || {},
+        completedAt: req.body.status === "completed" ? new Date() : null,
+        completedBy: req.body.status === "completed" ? userId : null,
+      });
+      
+      const status = await storage.upsertStageStatus(validatedData);
+      
+      // Log the edit
+      await storage.createStageEditLog({
+        companyId,
+        inquiryId,
+        stageName,
+        userId,
+        action: req.body.status === "completed" ? "completed" : "updated",
+        changedFields: req.body.stageData || {},
+      });
+      
+      res.json(status);
+    } catch (error) {
+      console.error("Error saving stage status:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to save stage status" });
+    }
+  });
+
+  // Get stage edit history
+  app.get("/api/inquiries/:id/stage-edit-logs", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      // Verify inquiry belongs to company
+      const inquiry = await storage.getInquiry(inquiryId, companyId);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      const limit = parseInt(req.query.limit as string) || 50;
+      const logs = await storage.getStageEditLogs(inquiryId, limit);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching stage edit logs:", error);
+      res.status(500).json({ message: "Failed to fetch stage edit logs" });
+    }
+  });
+
+  // ========================
+  // DOCUMENT DOWNLOAD ENDPOINT
+  // ========================
+
+  // Download all completed documents as ZIP
+  app.get("/api/inquiries/:id/download-docs", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      // Verify inquiry belongs to company and is admitted
+      const inquiry = await storage.getInquiry(inquiryId, companyId);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      // Get all form data
+      const [preCertForm, nursingForm, preScreeningForm, company] = await Promise.all([
+        storage.getPreCertForm(inquiryId),
+        storage.getNursingAssessmentForm(inquiryId),
+        storage.getPreScreeningForm(inquiryId),
+        storage.getCompany(companyId),
+      ]);
+      
+      // Create folder name from client info
+      const lastName = (inquiry.clientName || inquiry.callerName || "Unknown").split(" ").pop() || "Unknown";
+      const firstName = (inquiry.clientName || inquiry.callerName || "Unknown").split(" ")[0] || "Unknown";
+      const folderName = `${lastName}_${firstName}_${inquiryId}`;
+      
+      // Set response headers for ZIP download
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${folderName}_Documents.zip"`);
+      
+      // Create ZIP archive
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.pipe(res);
+      
+      // Generate Face Sheet PDF
+      const faceSheetBuffer = await generateFaceSheetPdf(inquiry, company);
+      archive.append(faceSheetBuffer, { name: `${folderName}/01_FaceSheet.pdf` });
+      
+      // Generate Pre-Cert PDF if complete
+      if (preCertForm && preCertForm.isComplete === "yes") {
+        const preCertBuffer = await generateFormPdf("Pre-Certification Form", preCertForm.formData);
+        archive.append(preCertBuffer, { name: `${folderName}/02_PreCert.pdf` });
+      }
+      
+      // Generate Nursing Assessment PDF if complete
+      if (nursingForm && nursingForm.isComplete === "yes") {
+        const nursingBuffer = await generateFormPdf("Nursing Assessment", nursingForm.formData);
+        archive.append(nursingBuffer, { name: `${folderName}/03_NursingAssessment.pdf` });
+      }
+      
+      // Generate Pre-Screening PDF if complete
+      if (preScreeningForm && preScreeningForm.isComplete === "yes") {
+        const screeningBuffer = await generateFormPdf("Pre-Screening Form", preScreeningForm.formData);
+        archive.append(screeningBuffer, { name: `${folderName}/04_PreScreening.pdf` });
+      }
+      
+      // Log the download for audit
+      await logAudit(companyId, req.user.claims.sub, "view", "inquiry_documents", inquiryId, "Downloaded all documents as ZIP", req);
+      
+      await archive.finalize();
+    } catch (error) {
+      console.error("Error generating document ZIP:", error);
+      res.status(500).json({ message: "Failed to generate documents" });
+    }
+  });
+
+  // ========================
   // BILLING ENDPOINTS (Admin only)
   // ========================
 
@@ -2116,4 +2308,141 @@ function mapCTMSourceToReferral(ctmSource: string | undefined): string {
   }
   
   return "other";
+}
+
+// PDF Generation Helper Functions
+async function generateFaceSheetPdf(inquiry: any, company: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const doc = new PDFDocument({ margin: 50 });
+    
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    
+    // Header
+    doc.fontSize(20).text(company?.name || "Face Sheet", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(12).text(`Generated: ${new Date().toLocaleDateString()}`, { align: "center" });
+    doc.moveDown(2);
+    
+    // Client Information
+    doc.fontSize(14).text("Client Information", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Caller Name: ${inquiry.callerName || "N/A"}`);
+    doc.text(`Client Name: ${inquiry.clientName || "Same as caller"}`);
+    doc.text(`Phone: ${inquiry.phoneNumber || "N/A"}`);
+    doc.text(`Date of Birth: ${inquiry.dateOfBirth ? new Date(inquiry.dateOfBirth).toLocaleDateString() : "N/A"}`);
+    doc.text(`Gender: ${inquiry.gender || "N/A"}`);
+    doc.moveDown();
+    
+    // Stage Information
+    doc.fontSize(14).text("Admission Status", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Current Stage: ${stageDisplayNames[inquiry.stage as keyof typeof stageDisplayNames] || inquiry.stage}`);
+    doc.text(`Inquiry Date: ${inquiry.createdAt ? new Date(inquiry.createdAt).toLocaleDateString() : "N/A"}`);
+    if (inquiry.admittedAt) {
+      doc.text(`Admitted Date: ${new Date(inquiry.admittedAt).toLocaleDateString()}`);
+    }
+    if (inquiry.dischargeDate) {
+      doc.text(`Expected Discharge: ${new Date(inquiry.dischargeDate).toLocaleDateString()}`);
+    }
+    doc.moveDown();
+    
+    // Insurance Information
+    doc.fontSize(14).text("Insurance Information", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Insurance Provider: ${inquiry.insuranceProvider || "N/A"}`);
+    doc.text(`Policy Number: ${inquiry.policyNumber || "N/A"}`);
+    doc.text(`Group Number: ${inquiry.groupNumber || "N/A"}`);
+    doc.text(`Subscriber Name: ${inquiry.subscriberName || "N/A"}`);
+    doc.text(`Subscriber DOB: ${inquiry.subscriberDob ? new Date(inquiry.subscriberDob).toLocaleDateString() : "N/A"}`);
+    doc.text(`Relationship to Subscriber: ${inquiry.relationshipToSubscriber || "N/A"}`);
+    doc.moveDown();
+    
+    // Clinical Information
+    doc.fontSize(14).text("Clinical Information", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11);
+    doc.text(`Level of Care: ${inquiry.levelOfCare || "N/A"}`);
+    if (inquiry.presentingProblems) {
+      doc.text(`Presenting Problems: ${inquiry.presentingProblems}`);
+    }
+    if (inquiry.treatmentTypeDetox || inquiry.treatmentTypeResidential || inquiry.treatmentTypePHP) {
+      const treatments = [];
+      if (inquiry.treatmentTypeDetox) treatments.push("Detox");
+      if (inquiry.treatmentTypeResidential) treatments.push("Residential");
+      if (inquiry.treatmentTypePHP) treatments.push("PHP");
+      doc.text(`Treatment Types: ${treatments.join(", ")}`);
+    }
+    doc.moveDown();
+    
+    // Notes
+    if (inquiry.initialNotes) {
+      doc.fontSize(14).text("Initial Notes", { underline: true });
+      doc.moveDown(0.5);
+      doc.fontSize(11).text(inquiry.initialNotes);
+    }
+    
+    doc.end();
+  });
+}
+
+async function generateFormPdf(title: string, formData: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const doc = new PDFDocument({ margin: 50 });
+    
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    
+    // Header
+    doc.fontSize(18).text(title, { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).text(`Generated: ${new Date().toLocaleDateString()}`, { align: "center" });
+    doc.moveDown(2);
+    
+    // Render form data
+    doc.fontSize(11);
+    if (formData && typeof formData === "object") {
+      renderFormData(doc, formData, 0);
+    } else {
+      doc.text("No form data available.");
+    }
+    
+    doc.end();
+  });
+}
+
+function renderFormData(doc: PDFKit.PDFDocument, data: any, indent: number): void {
+  const leftMargin = 50 + (indent * 20);
+  
+  for (const [key, value] of Object.entries(data)) {
+    if (value === null || value === undefined || value === "") continue;
+    
+    // Format the key for display
+    const displayKey = key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, (str) => str.toUpperCase())
+      .trim();
+    
+    if (typeof value === "object" && !Array.isArray(value)) {
+      doc.text(`${displayKey}:`, leftMargin);
+      doc.moveDown(0.3);
+      renderFormData(doc, value, indent + 1);
+    } else if (Array.isArray(value)) {
+      doc.text(`${displayKey}: ${value.join(", ")}`, leftMargin);
+      doc.moveDown(0.3);
+    } else if (typeof value === "boolean") {
+      doc.text(`${displayKey}: ${value ? "Yes" : "No"}`, leftMargin);
+      doc.moveDown(0.3);
+    } else {
+      doc.text(`${displayKey}: ${value}`, leftMargin);
+      doc.moveDown(0.3);
+    }
+  }
 }
