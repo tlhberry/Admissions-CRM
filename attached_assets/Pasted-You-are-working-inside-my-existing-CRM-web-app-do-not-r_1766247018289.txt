@@ -1,0 +1,94 @@
+You are working inside my existing CRM web app (do not redesign the whole app). Add the following features while keeping everything else the same.
+
+Goal
+
+Inside a single Inquiry, I need to open the “Face Sheet” and:
+	1.	Jump back to any previous stage we already completed and edit the info (example: Pre-Assessment)
+	2.	Keep the inquiry stage tracking intact (no duplicate inquiries, no lost data)
+	3.	On the final stage (Admitted / Completed), add a button to download ALL completed assessment documents for that inquiry in one click
+
+⸻
+
+Feature 1: Stage Navigation Within an Inquiry (Editable Previous Steps)
+
+Requirements
+	•	In the Inquiry detail (Face Sheet) view, add a clear “Stage Navigator” UI element that shows all pipeline stages in order:
+	•	New Inquiry
+	•	Viable / Non-Viable
+	•	Insurance Collected
+	•	VOB Stage
+	•	Quoted Price
+	•	Pre-Assessment
+	•	Schedule Admit
+	•	Admitted (Final)
+
+Behavior
+	•	User can click any stage tab/step to open that stage’s form section and edit previously saved data.
+	•	Editing does NOT change the stage unless the user explicitly clicks a “Save” or “Mark Stage Complete” button.
+	•	If a stage is not yet started, it should still be viewable, but show as “Not Started” and saving it sets it to “In Progress” or “Completed” depending on the action.
+
+Data & Audit
+	•	Store stage completion flags and timestamps (completed_at) per stage.
+	•	Keep a lightweight change history per stage (who edited, when). This can be a simple log table:
+	•	inquiry_id, stage_name, user_id, edited_at
+	•	Do not break existing inquiry routing, CTM linking, or call logs.
+
+UI
+	•	Add “Edit Mode” per stage section:
+	•	Default is View mode (read-only summary)
+	•	Click “Edit” to enable inputs
+	•	“Save Changes” persists edits
+	•	“Cancel” reverts to last saved
+
+⸻
+
+Feature 2: Final Stage “Download All Completed Docs” Button
+
+Requirements
+
+On the final stage (Admitted / Completed) add a button:
+
+Button label: “Download All Docs”
+
+What it downloads
+	•	A single ZIP file containing all completed assessment documents for that inquiry.
+	•	Include only documents that exist for that inquiry (skip missing).
+	•	File naming inside the ZIP must be clean and consistent:
+	•	{LastName}_{FirstName}_{InquiryId}/
+	•	01_FaceSheet.pdf
+	•	02_Insurance.pdf
+	•	03_VOB.pdf
+	•	04_PriceQuote.pdf
+	•	05_PreAssessment.pdf
+	•	06_ScheduleAdmit.pdf
+	•	etc.
+
+Document source rules (choose best based on current app)
+	•	If documents are already stored as files: zip them directly.
+	•	If forms are stored as data in DB: generate PDFs server-side for each stage using the saved data, then zip.
+	•	The ZIP is generated server-side and streamed to the browser for download.
+
+Security
+	•	Only authenticated users with permission to view the inquiry can download the ZIP.
+	•	Ensure the download route verifies access using inquiry_id + current user.
+
+⸻
+
+Backend Implementation Notes
+	•	Add/extend DB tables to support:
+	•	stage_status fields (per stage: status enum + completed_at)
+	•	stage_data storage (either per-stage JSON blobs or existing tables)
+	•	stage_edit_log table
+	•	Add API endpoints:
+	•	GET inquiry + all stage data/status
+	•	PUT update stage data
+	•	POST mark stage complete (optional if separate)
+	•	GET /inquiries/:id/download-docs -> returns ZIP
+
+⸻
+
+Acceptance Criteria
+	•	I can open any inquiry, click “Pre-Assessment” (or any earlier stage), edit, save, and see updates reflected immediately.
+	•	Stage completion indicators remain correct and do not reset unless I explicitly change them.
+	•	On the final stage, clicking “Download All Docs” downloads a ZIP that includes all available documents for that inquiry.
+	•	No breaking changes to existing pipeline, CTM call logging, or inquiry creation.

@@ -914,6 +914,85 @@ export const insertContactSubmissionSchema = createInsertSchema(contactSubmissio
 export type ContactSubmission = typeof contactSubmissions.$inferSelect;
 export type InsertContactSubmission = z.infer<typeof insertContactSubmissionSchema>;
 
+// ========================
+// STAGE TRACKING SYSTEM
+// ========================
+
+// Stage status values
+export const stageStatuses = ["not_started", "in_progress", "completed"] as const;
+export type StageStatus = typeof stageStatuses[number];
+
+// Stages that can have detailed data (excluding terminal states)
+export const trackableStages = [
+  "inquiry",
+  "vob_pending", 
+  "quote_client",
+  "pre_assessment",
+  "scheduled",
+  "admitted",
+] as const;
+export type TrackableStage = typeof trackableStages[number];
+
+// Stage display order for navigation
+export const stageOrder: TrackableStage[] = [
+  "inquiry",
+  "vob_pending",
+  "quote_client",
+  "pre_assessment",
+  "scheduled",
+  "admitted",
+];
+
+// Inquiry Stage Status table - tracks completion per stage
+export const inquiryStageStatus = pgTable("inquiry_stage_status", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull(),
+  stageName: varchar("stage_name", { length: 50 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("not_started"),
+  stageData: jsonb("stage_data").default({}),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("IDX_stage_status_inquiry").on(table.inquiryId),
+  index("IDX_stage_status_stage").on(table.stageName),
+]);
+
+export const insertInquiryStageStatusSchema = createInsertSchema(inquiryStageStatus).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InquiryStageStatus = typeof inquiryStageStatus.$inferSelect;
+export type InsertInquiryStageStatus = z.infer<typeof insertInquiryStageStatusSchema>;
+
+// Stage Edit Logs table - lightweight audit trail for stage edits
+export const stageEditLogs = pgTable("stage_edit_logs", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id).notNull(),
+  stageName: varchar("stage_name", { length: 50 }).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  action: varchar("action", { length: 20 }).notNull(), // created, updated, completed
+  changedFields: jsonb("changed_fields").default({}),
+  editedAt: timestamp("edited_at").defaultNow().notNull(),
+}, (table) => [
+  index("IDX_stage_edit_inquiry").on(table.inquiryId),
+  index("IDX_stage_edit_user").on(table.userId),
+  index("IDX_stage_edit_time").on(table.editedAt),
+]);
+
+export const insertStageEditLogSchema = createInsertSchema(stageEditLogs).omit({
+  id: true,
+  editedAt: true,
+});
+
+export type StageEditLog = typeof stageEditLogs.$inferSelect;
+export type InsertStageEditLog = z.infer<typeof insertStageEditLogSchema>;
+
 // Billing constants
 export const BILLING_PRICES = {
   monthly: {
