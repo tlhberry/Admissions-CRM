@@ -2507,23 +2507,25 @@ async function generateAdmissionsReportPdf(
     // Function to add footer to current page
     const addFooter = () => {
       const savedY = doc.y;
+      const savedX = doc.x;
       
-      // Footer area at fixed position
+      // Footer area at fixed position - use lineBreak: false to prevent page creation
       doc.font("Helvetica").fontSize(8);
       doc.text(
         "CONFIDENTIAL - Protected Health Information",
         margins.left,
         792 - margins.bottom + 10,
-        { width: pageWidth, align: "center" }
+        { width: pageWidth, align: "center", lineBreak: false }
       );
       doc.text(
         `Page ${pageNumber}`,
         margins.left,
         792 - margins.bottom + 22,
-        { width: pageWidth, align: "center" }
+        { width: pageWidth, align: "center", lineBreak: false }
       );
       
       // Restore position and font to defaults
+      doc.x = savedX;
       doc.y = savedY;
       doc.font("Helvetica").fontSize(10);
     };
@@ -2545,8 +2547,9 @@ async function generateAdmissionsReportPdf(
     // Helper function to add section headers
     const addSectionHeader = (title: string) => {
       checkPageBreak(60); // Ensure header + some content fits
+      doc.x = margins.left; // Reset to left margin
       doc.moveDown(0.4);
-      doc.fontSize(11).font("Helvetica-Bold").text(sanitizeText(title));
+      doc.fontSize(11).font("Helvetica-Bold").text(sanitizeText(title), { width: pageWidth });
       doc.moveTo(margins.left, doc.y + 2).lineTo(margins.left + pageWidth, doc.y + 2).stroke();
       doc.moveDown(0.3);
       doc.font("Helvetica").fontSize(10);
@@ -2555,14 +2558,16 @@ async function generateAdmissionsReportPdf(
     // Helper to add field with label
     const addField = (label: string, value: any) => {
       checkPageBreak(20);
-      doc.font("Helvetica-Bold").text(`${sanitizeText(label)}: `, { continued: true });
-      doc.font("Helvetica").text(formatValue(value));
+      doc.x = margins.left; // Ensure left margin
+      doc.font("Helvetica-Bold").text(`${sanitizeText(label)}: `, { continued: true, width: pageWidth });
+      doc.font("Helvetica").text(formatValue(value), { width: pageWidth });
     };
     
     // Helper to add text block
     const addText = (text: string) => {
       checkPageBreak(20);
-      doc.font("Helvetica").fontSize(10).text(sanitizeText(text));
+      doc.x = margins.left; // Ensure left margin
+      doc.font("Helvetica").fontSize(10).text(sanitizeText(text), { width: pageWidth });
     };
     
     // ============ HEADER ============
@@ -2673,6 +2678,8 @@ async function generateAdmissionsReportPdf(
           });
           doc.moveDown(0.3);
         });
+        // Reset position to left margin after table
+        doc.x = margins.left;
         doc.fontSize(10);
       } else {
         addText("No substance history recorded.");
