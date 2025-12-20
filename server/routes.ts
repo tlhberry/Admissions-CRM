@@ -1658,8 +1658,14 @@ ${transcription}`;
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      // Get the inquiry to find its companyId
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const userId = req.user.claims.sub;
       const validatedData = insertPreCertFormSchema.parse({
+        companyId,
         inquiryId,
         formData: req.body.formData || {},
         isComplete: req.body.isComplete || "no",
@@ -1694,8 +1700,14 @@ ${transcription}`;
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      // Get the inquiry to find its companyId
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const userId = req.user.claims.sub;
       const validatedData = insertNursingAssessmentFormSchema.parse({
+        companyId,
         inquiryId,
         formData: req.body.formData || {},
         isComplete: req.body.isComplete || "no",
@@ -1730,8 +1742,14 @@ ${transcription}`;
     try {
       const inquiryId = parseInt(req.params.id);
       if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      // Get the inquiry to find its companyId
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
       const userId = req.user.claims.sub;
       const validatedData = insertPreScreeningFormSchema.parse({
+        companyId,
         inquiryId,
         formData: req.body.formData || {},
         isComplete: req.body.isComplete || "no",
