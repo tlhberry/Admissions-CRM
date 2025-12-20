@@ -59,6 +59,7 @@ import {
   Sparkles,
   PhoneOutgoing,
   PhoneIncoming,
+  Download,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource, CallLog } from "@shared/schema";
 import {
@@ -104,6 +105,7 @@ export default function InquiryDetail() {
   const [showNonViableDialog, setShowNonViableDialog] = useState(false);
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [isDownloadingDocs, setIsDownloadingDocs] = useState(false);
+  const [isDownloadingPreAssessment, setIsDownloadingPreAssessment] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
@@ -281,6 +283,43 @@ export default function InquiryDetail() {
       });
     } finally {
       setIsDownloadingDocs(false);
+    }
+  };
+
+  const handleDownloadPreAssessmentForms = async () => {
+    if (!id) return;
+    setIsDownloadingPreAssessment(true);
+    try {
+      const response = await fetch(`/api/inquiries/${id}/download-pre-assessment-forms`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to download pre-assessment forms");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = response.headers.get("Content-Disposition");
+      const filename = disposition?.match(/filename="(.+)"/)?.[1] || "pre-assessment-forms.zip";
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: "Download Started",
+        description: "Pre-assessment forms are being downloaded.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to download pre-assessment forms.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingPreAssessment(false);
     }
   };
 
@@ -884,7 +923,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
             inquiryId={inquiry.id}
             onComplete={selectedViewStage ? undefined : (notes) => updateMutation.mutate({ preAssessmentCompleted: "yes", preAssessmentDate: new Date(), preAssessmentNotes: notes, stage: "scheduled" })}
             isPending={updateMutation.isPending}
-            readOnly={!!selectedViewStage}
+            readOnly={false}
           />
         )}
 
@@ -955,6 +994,24 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                     <>
                       <Copy className="w-4 h-4 mr-2" />
                       Copy Summary
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadPreAssessmentForms}
+                  disabled={isDownloadingPreAssessment}
+                  data-testid="button-download-pre-assessment"
+                >
+                  {isDownloadingPreAssessment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Pre-Assessment Forms
                     </>
                   )}
                 </Button>

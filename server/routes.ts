@@ -1972,6 +1972,84 @@ ${transcription}`;
     }
   });
 
+  // Download only pre-assessment forms (Pre-Cert, Nursing Assessment, Pre-Screening)
+  app.get("/api/inquiries/:id/download-pre-assessment-forms", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const inquiryId = parseInt(req.params.id);
+      if (isNaN(inquiryId)) return res.status(400).json({ message: "Invalid inquiry ID" });
+      
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+      
+      const inquiry = await storage.getInquiry(inquiryId, companyId);
+      if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+      
+      // Get pre-assessment form data
+      const [preCertForm, nursingForm, preScreeningForm] = await Promise.all([
+        storage.getPreCertForm(inquiryId),
+        storage.getNursingAssessmentForm(inquiryId),
+        storage.getPreScreeningForm(inquiryId),
+      ]);
+      
+      // Check if any forms have data
+      const hasForms = (preCertForm?.formData && Object.keys(preCertForm.formData as object).length > 0) ||
+                       (nursingForm?.formData && Object.keys(nursingForm.formData as object).length > 0) ||
+                       (preScreeningForm?.formData && Object.keys(preScreeningForm.formData as object).length > 0);
+      
+      if (!hasForms) {
+        return res.status(400).json({ message: "No pre-assessment forms have been completed yet" });
+      }
+      
+      const lastName = (inquiry.clientName || inquiry.callerName || "Unknown").split(" ").pop() || "Unknown";
+      const firstName = (inquiry.clientName || inquiry.callerName || "Unknown").split(" ")[0] || "Unknown";
+      const folderName = `${lastName}_${firstName}_PreAssessment`;
+      
+      // Generate PDFs before starting the stream to catch errors early
+      const pdfBuffers: { name: string; buffer: Buffer }[] = [];
+      
+      if (preCertForm && preCertForm.formData && Object.keys(preCertForm.formData as object).length > 0) {
+        const preCertBuffer = await generateFormPdf("Pre-Certification Form", preCertForm.formData);
+        pdfBuffers.push({ name: `${folderName}/01_PreCertification.pdf`, buffer: preCertBuffer });
+      }
+      
+      if (nursingForm && nursingForm.formData && Object.keys(nursingForm.formData as object).length > 0) {
+        const nursingBuffer = await generateFormPdf("Nursing Assessment", nursingForm.formData);
+        pdfBuffers.push({ name: `${folderName}/02_NursingAssessment.pdf`, buffer: nursingBuffer });
+      }
+      
+      if (preScreeningForm && preScreeningForm.formData && Object.keys(preScreeningForm.formData as object).length > 0) {
+        const screeningBuffer = await generateFormPdf("Pre-Screening Form", preScreeningForm.formData);
+        pdfBuffers.push({ name: `${folderName}/03_PreScreening.pdf`, buffer: screeningBuffer });
+      }
+      
+      // Now start the stream after all PDFs are generated successfully
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${folderName}.zip"`);
+      
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.on("error", (err) => {
+        console.error("Archive error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Failed to generate archive" });
+        }
+      });
+      archive.pipe(res);
+      
+      for (const pdf of pdfBuffers) {
+        archive.append(pdf.buffer, { name: pdf.name });
+      }
+      
+      await logAudit(companyId, req.user.claims.sub, "view", "inquiry_documents", inquiryId, "Downloaded pre-assessment forms as ZIP", req);
+      
+      await archive.finalize();
+    } catch (error) {
+      console.error("Error generating pre-assessment ZIP:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Failed to generate pre-assessment forms" });
+      }
+    }
+  });
+
   // ========================
   // BILLING ENDPOINTS (Admin only)
   // ========================
