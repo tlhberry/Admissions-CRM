@@ -73,6 +73,7 @@ import {
 } from "@shared/schema";
 import { format } from "date-fns";
 import { PreAssessmentForms } from "@/components/PreAssessmentForms";
+import { StageNavigator } from "@/components/StageNavigator";
 
 const stageIcons: Record<PipelineStage, typeof Phone> = {
   inquiry: Phone,
@@ -102,6 +103,7 @@ export default function InquiryDetail() {
   const { toast } = useToast();
   const [showNonViableDialog, setShowNonViableDialog] = useState(false);
   const [showLostDialog, setShowLostDialog] = useState(false);
+  const [isDownloadingDocs, setIsDownloadingDocs] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
@@ -245,6 +247,42 @@ export default function InquiryDetail() {
     }
   };
 
+  const handleDownloadDocs = async () => {
+    if (!id) return;
+    setIsDownloadingDocs(true);
+    try {
+      const response = await fetch(`/api/inquiries/${id}/download-docs`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to download documents");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = response.headers.get("Content-Disposition");
+      const filename = disposition?.match(/filename="(.+)"/)?.[1] || "documents.zip";
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: "Download Started",
+        description: "Your documents are being downloaded.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to download documents. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingDocs(false);
+    }
+  };
+
   const handleNonViable = (reason: NonViableReason, notes: string) => {
     updateMutation.mutate({
       isViable: "no",
@@ -360,6 +398,14 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-3xl space-y-6">
+        {/* Stage Navigator */}
+        <StageNavigator
+          inquiryId={parseInt(id!)}
+          currentStage={stage!}
+          onDownloadDocs={handleDownloadDocs}
+          isDownloading={isDownloadingDocs}
+        />
+
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
