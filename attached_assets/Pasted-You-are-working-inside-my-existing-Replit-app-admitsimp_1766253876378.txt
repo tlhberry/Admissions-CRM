@@ -1,0 +1,157 @@
+You are working inside my existing Replit app “admitsimple”. Do not redesign the whole app. Make the smallest changes needed to add a new PDF report generator at the “Admitted” stage.
+
+Goal
+
+At the end of the pipeline (Admitted stage), keep:
+	•	“Copy Summary” button exactly as is (still used to paste into an email)
+
+Replace:
+	•	“Download Pre-Assessment Forms” button
+
+With:
+	•	“Download Admissions PDF Report”
+
+When clicked, it generates and downloads a single PDF called:
+	•	Admissions_Report_<InquiryID>_<LastName>.pdf
+
+This PDF must be formatted like a utilization management and medical necessity packet. It must be optimized to support payer authorization and continued stay reviews, but it must not exaggerate, invent details, or include any fraud. If a field is missing, show “Not provided”.
+
+Data source
+
+Use all data already captured in the app for the inquiry, including:
+	•	Caller and client demographics
+	•	Referral source
+	•	Presenting problems narrative
+	•	Level of care interest and recommendation
+	•	Substance use history (each substance, age of first use, frequency, amount, last use date, route, notes)
+	•	Withdrawal symptoms checklist and notes
+	•	Severity of illness selection
+	•	Treatment history narrative
+	•	Medical conditions, meds, allergies
+	•	Mental health history, SI/HI fields
+	•	Legal status fields and narrative
+	•	Psychosocial narrative and family history
+	•	Any other fields in pre screen and pre assessment forms
+	•	Insurance payer name and policy ID if present
+	•	Admission date and stage timestamps if available
+
+PDF content requirements
+
+Generate a clean, professional PDF that includes these sections in this order:
+	1.	Header
+
+	•	Facility / program name (use current app name if no facility field exists)
+	•	“Admissions Clinical Summary for Utilization Review”
+	•	Date generated
+	•	Inquiry ID
+
+	2.	Patient and caller info
+
+	•	Client name, DOB, caller name, relationship, phone, email (if present)
+
+	3.	Insurance information
+
+	•	Payer, policy ID, member ID, plan type if present
+
+	4.	Referral source and reason for call
+
+	•	Checkboxes and narrative
+
+	5.	Presenting problems and current risks
+
+	•	Use the presenting problems text plus relevant risk factors from fields
+
+	6.	Substance use history table
+
+	•	One row per substance
+	•	Columns: Substance, First use, Frequency, Amount, Route, Last use, Notes
+	•	If any value missing show “Not provided”
+
+	7.	Withdrawal risk and current symptoms
+
+	•	List checked symptoms
+	•	Include withdrawal notes
+	•	Include “Clinical impression” paragraph based only on entered symptoms and use patterns. Do not diagnose beyond what is entered.
+
+	8.	Treatment history and failed lower level supports
+
+	•	Pull entered treatment history narrative and AA history
+	•	If none, state “No prior formal treatment reported” or “Not provided” based on data
+
+	9.	Medical and psychiatric history
+
+	•	Medical conditions, current meds, allergies
+	•	ER visits, panic attacks, psych hospitalizations
+	•	SI and HI fields clearly documented
+
+	10.	Psychosocial and functional impairment
+
+	•	Employment, housing if present, family history, support system if present
+
+	11.	Legal and external stressors
+
+	•	Legal status selections and narrative
+
+	12.	Level of care recommendation
+
+	•	Show selected LOC (Residential)
+	•	Include a “Medical Necessity Summary” paragraph that ties together: severity, withdrawal risk, psychosocial instability, inability to sustain sobriety in less restrictive settings. Only use facts from the record.
+
+	13.	Initial treatment focus
+
+	•	Bullet list: 24 hour structured programming, withdrawal monitoring, psychiatric evaluation if indicated, relapse prevention, discharge planning
+
+	14.	Sign off block
+
+	•	Prepared by: (leave blank line for staff)
+	•	Title:
+	•	Date:
+	•	Optional checkbox “Information reviewed with patient”
+
+Formatting requirements
+	•	Must look good on iPhone preview and desktop
+	•	No black boxes or weird glyphs. Use safe fonts and plain characters only.
+	•	Clear headings, spacing, and consistent margins
+	•	Tables should wrap text cleanly
+	•	Page numbers in footer
+	•	If possible, include a small “Confidential” footer note
+
+Tech implementation requirements
+	1.	Add a backend endpoint that returns a PDF:
+
+	•	Example: GET /api/inquiries/:id/admissions-report.pdf
+	•	It must validate authentication and authorization like other inquiry endpoints.
+	•	It must fetch inquiry data from the database using the same models already used in the UI.
+
+	2.	Generate the PDF server-side
+Use a reliable approach already compatible with the project:
+
+	•	Prefer a PDF library (pdfkit) OR render an HTML template then convert to PDF (puppeteer) depending on what is already installed.
+	•	Keep dependencies minimal.
+
+	3.	Add the button in the Admitted stage UI
+
+	•	Replace the existing “Download Pre-Assessment Forms” button with “Download Admissions PDF Report”
+	•	Clicking should download the PDF file directly to the user device
+	•	While generating, show a loading state and disable the button
+	•	On failure, show a useful error toast with the actual error message
+
+	4.	Store a copy (optional but preferred)
+
+	•	If there is already a documents table or file storage flow, store the generated PDF and link it to the inquiry
+	•	If not, skip storage for now and just generate on demand
+
+	5.	Logging and audit trail (lightweight)
+
+	•	Add an event log entry “Admissions PDF generated” with timestamp and user id if the app has an activity log feature.
+
+Acceptance criteria
+	•	Button appears only on Admitted stage
+	•	PDF downloads successfully on iPhone Safari and desktop Chrome
+	•	PDF includes all captured fields and shows “Not provided” for missing fields
+	•	No black boxes in text
+	•	No changes to “Copy Summary”
+	•	No changes to the rest of the pipeline logic
+	•	Fully truthful content, no invented clinical claims
+
+Now implement this change in the codebase, update any necessary routes, and test end-to-end.

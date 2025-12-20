@@ -105,7 +105,7 @@ export default function InquiryDetail() {
   const [showNonViableDialog, setShowNonViableDialog] = useState(false);
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [isDownloadingDocs, setIsDownloadingDocs] = useState(false);
-  const [isDownloadingPreAssessment, setIsDownloadingPreAssessment] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
@@ -286,40 +286,40 @@ export default function InquiryDetail() {
     }
   };
 
-  const handleDownloadPreAssessmentForms = async () => {
+  const handleDownloadAdmissionsReport = async () => {
     if (!id) return;
-    setIsDownloadingPreAssessment(true);
+    setIsDownloadingReport(true);
     try {
-      const response = await fetch(`/api/inquiries/${id}/download-pre-assessment-forms`, {
+      const response = await fetch(`/api/inquiries/${id}/admissions-report.pdf`, {
         credentials: "include",
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to download pre-assessment forms");
+        throw new Error(errorData.message || "Failed to generate admissions report");
       }
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       const disposition = response.headers.get("Content-Disposition");
-      const filename = disposition?.match(/filename="(.+)"/)?.[1] || "pre-assessment-forms.zip";
+      const filename = disposition?.match(/filename="(.+)"/)?.[1] || "admissions-report.pdf";
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       toast({
-        title: "Download Started",
-        description: "Pre-assessment forms are being downloaded.",
+        title: "Download Complete",
+        description: "Admissions PDF Report has been downloaded.",
       });
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to download pre-assessment forms.",
+        description: error instanceof Error ? error.message : "Failed to generate admissions report.",
         variant: "destructive",
       });
     } finally {
-      setIsDownloadingPreAssessment(false);
+      setIsDownloadingReport(false);
     }
   };
 
@@ -999,19 +999,19 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleDownloadPreAssessmentForms}
-                  disabled={isDownloadingPreAssessment}
-                  data-testid="button-download-pre-assessment"
+                  onClick={handleDownloadAdmissionsReport}
+                  disabled={isDownloadingReport}
+                  data-testid="button-download-admissions-report"
                 >
-                  {isDownloadingPreAssessment ? (
+                  {isDownloadingReport ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Downloading...
+                      Generating...
                     </>
                   ) : (
                     <>
                       <Download className="w-4 h-4 mr-2" />
-                      Download Pre-Assessment Forms
+                      Download Admissions PDF Report
                     </>
                   )}
                 </Button>
