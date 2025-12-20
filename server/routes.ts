@@ -1944,20 +1944,20 @@ ${transcription}`;
       const faceSheetBuffer = await generateFaceSheetPdf(inquiry, company);
       archive.append(faceSheetBuffer, { name: `${folderName}/01_FaceSheet.pdf` });
       
-      // Generate Pre-Cert PDF if complete
-      if (preCertForm && preCertForm.isComplete === "yes") {
+      // Generate Pre-Cert PDF if form exists and has data
+      if (preCertForm && preCertForm.formData && Object.keys(preCertForm.formData as object).length > 0) {
         const preCertBuffer = await generateFormPdf("Pre-Certification Form", preCertForm.formData);
         archive.append(preCertBuffer, { name: `${folderName}/02_PreCert.pdf` });
       }
       
-      // Generate Nursing Assessment PDF if complete
-      if (nursingForm && nursingForm.isComplete === "yes") {
+      // Generate Nursing Assessment PDF if form exists and has data
+      if (nursingForm && nursingForm.formData && Object.keys(nursingForm.formData as object).length > 0) {
         const nursingBuffer = await generateFormPdf("Nursing Assessment", nursingForm.formData);
         archive.append(nursingBuffer, { name: `${folderName}/03_NursingAssessment.pdf` });
       }
       
-      // Generate Pre-Screening PDF if complete
-      if (preScreeningForm && preScreeningForm.isComplete === "yes") {
+      // Generate Pre-Screening PDF if form exists and has data
+      if (preScreeningForm && preScreeningForm.formData && Object.keys(preScreeningForm.formData as object).length > 0) {
         const screeningBuffer = await generateFormPdf("Pre-Screening Form", preScreeningForm.formData);
         archive.append(screeningBuffer, { name: `${folderName}/04_PreScreening.pdf` });
       }

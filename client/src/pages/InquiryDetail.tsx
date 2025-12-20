@@ -112,6 +112,7 @@ export default function InquiryDetail() {
   const [showCreateAccountDialog, setShowCreateAccountDialog] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [presentingProblemsText, setPresentingProblemsText] = useState("");
+  const [selectedViewStage, setSelectedViewStage] = useState<PipelineStage | null>(null);
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
@@ -305,6 +306,19 @@ export default function InquiryDetail() {
   const stage = inquiry?.stage as PipelineStage | undefined;
   const StageIcon = stage ? stageIcons[stage] : Phone;
 
+  const handleStageClick = (clickedStage: PipelineStage) => {
+    // Allow viewing any stage that has been completed or is current
+    if (clickedStage === stage) {
+      // Clicking on current stage resets to default view
+      setSelectedViewStage(null);
+    } else {
+      setSelectedViewStage(clickedStage);
+    }
+  };
+
+  // Determine which stage to show content for
+  const displayStage = selectedViewStage || stage;
+
   const generateAdmissionSummary = () => {
     if (!inquiry) return "";
     return `New Admit Expected: ${inquiry.expectedAdmitDate ? format(new Date(inquiry.expectedAdmitDate), "MMMM d, yyyy") : "TBD"}
@@ -402,9 +416,30 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
         <StageNavigator
           inquiryId={parseInt(id!)}
           currentStage={stage!}
+          onStageClick={handleStageClick}
           onDownloadDocs={handleDownloadDocs}
           isDownloading={isDownloadingDocs}
         />
+
+        {/* Show indicator when viewing a different stage */}
+        {selectedViewStage && selectedViewStage !== stage && (
+          <Card className="bg-muted/50">
+            <CardContent className="py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FileText className="w-4 h-4" />
+                <span>Viewing <strong className="text-foreground">{stageDisplayNames[selectedViewStage]}</strong> stage (Read-only)</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedViewStage(null)}
+                data-testid="button-return-current-stage"
+              >
+                Return to Current Stage
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -716,8 +751,8 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
                             {log.direction === "inbound" ? "Inbound" : "Outbound"}
                           </span>
                           <span className="text-muted-foreground">
-                            {log.callTimestamp 
-                              ? format(new Date(log.callTimestamp), "MMM d, yyyy 'at' h:mm a")
+                            {log.createdAt 
+                              ? format(new Date(log.createdAt), "MMM d, yyyy 'at' h:mm a")
                               : "—"
                             }
                           </span>
@@ -815,53 +850,58 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
           </CardContent>
         </Card>
 
-        {stage === "inquiry" && (
+        {displayStage === "inquiry" && (
           <InsuranceForm
             inquiry={inquiry}
-            onSubmit={(data) => updateMutation.mutate({ ...data, stage: "vob_pending" })}
-            onNonViable={() => setShowNonViableDialog(true)}
+            onSubmit={selectedViewStage ? undefined : (data) => updateMutation.mutate({ ...data, stage: "vob_pending" })}
+            onNonViable={selectedViewStage ? undefined : () => setShowNonViableDialog(true)}
             isPending={updateMutation.isPending}
+            readOnly={!!selectedViewStage}
           />
         )}
 
-        {stage === "vob_pending" && (
+        {displayStage === "vob_pending" && (
           <VOBForm
             inquiry={inquiry}
-            onSubmit={(data) => updateMutation.mutate({ ...data, stage: "quote_client", vobCompletedAt: new Date() })}
+            onSubmit={selectedViewStage ? undefined : (data) => updateMutation.mutate({ ...data, stage: "quote_client", vobCompletedAt: new Date() })}
             isPending={updateMutation.isPending}
+            readOnly={!!selectedViewStage}
           />
         )}
 
-        {stage === "quote_client" && (
+        {displayStage === "quote_client" && (
           <QuoteSection
             inquiry={inquiry}
-            onAccept={(notes) => updateMutation.mutate({ quoteAccepted: "yes", quoteNotes: notes, stage: "pre_assessment" })}
-            onDecline={(notes) => updateMutation.mutate({ quoteAccepted: "no", quoteNotes: notes, stage: "non_viable", nonViableReason: "client_declined" })}
+            onAccept={selectedViewStage ? undefined : (notes) => updateMutation.mutate({ quoteAccepted: "yes", quoteNotes: notes, stage: "pre_assessment" })}
+            onDecline={selectedViewStage ? undefined : (notes) => updateMutation.mutate({ quoteAccepted: "no", quoteNotes: notes, stage: "non_viable", nonViableReason: "client_declined" })}
             isPending={updateMutation.isPending}
+            readOnly={!!selectedViewStage}
           />
         )}
 
-        {stage === "pre_assessment" && (
+        {displayStage === "pre_assessment" && (
           <PreAssessmentSection
             inquiryId={inquiry.id}
-            onComplete={(notes) => updateMutation.mutate({ preAssessmentCompleted: "yes", preAssessmentDate: new Date(), preAssessmentNotes: notes, stage: "scheduled" })}
+            onComplete={selectedViewStage ? undefined : (notes) => updateMutation.mutate({ preAssessmentCompleted: "yes", preAssessmentDate: new Date(), preAssessmentNotes: notes, stage: "scheduled" })}
             isPending={updateMutation.isPending}
+            readOnly={!!selectedViewStage}
           />
         )}
 
-        {stage === "scheduled" && (
+        {displayStage === "scheduled" && (
           <SchedulingFormWrapper
             inquiry={inquiry}
-            onSubmit={(data) => updateMutation.mutate(data)}
-            onAdmit={() => updateMutation.mutate({ actualAdmitDate: new Date().toISOString().split("T")[0], stage: "admitted" })}
-            onLost={() => setShowLostDialog(true)}
+            onSubmit={selectedViewStage ? undefined : (data) => updateMutation.mutate(data)}
+            onAdmit={selectedViewStage ? undefined : () => updateMutation.mutate({ actualAdmitDate: new Date().toISOString().split("T")[0], stage: "admitted" })}
+            onLost={selectedViewStage ? undefined : () => setShowLostDialog(true)}
             isPending={updateMutation.isPending}
             onCopy={copyToClipboard}
             copied={copied}
+            readOnly={!!selectedViewStage}
           />
         )}
 
-        {stage === "admitted" && (
+        {displayStage === "admitted" && (
           <Card className="border-green-200 dark:border-green-800">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -923,7 +963,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
           </Card>
         )}
 
-        {stage === "non_viable" && (
+        {displayStage === "non_viable" && (
           <Card className="border-red-200 dark:border-red-800">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -948,7 +988,7 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
           </Card>
         )}
 
-        {stage === "lost" && (
+        {displayStage === "lost" && (
           <Card className="border-amber-200 dark:border-amber-800">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -1178,11 +1218,13 @@ function InsuranceForm({
   onSubmit,
   onNonViable,
   isPending,
+  readOnly = false,
 }: {
   inquiry: Inquiry;
-  onSubmit: (data: z.infer<typeof insuranceSchema>) => void;
-  onNonViable: () => void;
+  onSubmit?: (data: z.infer<typeof insuranceSchema>) => void;
+  onNonViable?: () => void;
   isPending: boolean;
+  readOnly?: boolean;
 }) {
   const { toast } = useToast();
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -1307,7 +1349,8 @@ function InsuranceForm({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={onSubmit ? form.handleSubmit(onSubmit) : (e) => e.preventDefault()} className="space-y-6">
+            <fieldset disabled={readOnly}>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
@@ -1469,6 +1512,7 @@ function InsuranceForm({
                 Not Viable
               </Button>
             </div>
+            </fieldset>
           </form>
         </Form>
       </CardContent>
@@ -1504,10 +1548,12 @@ function VOBForm({
   inquiry,
   onSubmit,
   isPending,
+  readOnly = false,
 }: {
   inquiry: Inquiry;
-  onSubmit: (data: z.infer<typeof vobSchema>) => void;
+  onSubmit?: (data: z.infer<typeof vobSchema>) => void;
   isPending: boolean;
+  readOnly?: boolean;
 }) {
   const [analyzing, setAnalyzing] = useState(false);
   const { toast } = useToast();
@@ -1608,7 +1654,8 @@ function VOBForm({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={onSubmit ? form.handleSubmit(onSubmit) : (e) => e.preventDefault()} className="space-y-6">
+            <fieldset disabled={readOnly}>
             <FormField
               control={form.control}
               name="vobDetails"
@@ -1956,6 +2003,7 @@ function VOBForm({
                 "VOB Complete - Quote Client"
               )}
             </Button>
+            </fieldset>
           </form>
         </Form>
       </CardContent>
@@ -1968,11 +2016,13 @@ function QuoteSection({
   onAccept,
   onDecline,
   isPending,
+  readOnly = false,
 }: {
   inquiry: Inquiry;
-  onAccept: (notes: string) => void;
-  onDecline: (notes: string) => void;
+  onAccept?: (notes: string) => void;
+  onDecline?: (notes: string) => void;
   isPending: boolean;
+  readOnly?: boolean;
 }) {
   const [notes, setNotes] = useState("");
 
@@ -2023,8 +2073,8 @@ function QuoteSection({
             size="lg"
             variant="outline"
             className="flex-1 h-14 border-destructive text-destructive hover:bg-destructive/10"
-            onClick={() => onDecline(notes)}
-            disabled={isPending}
+            onClick={() => onDecline?.(notes)}
+            disabled={isPending || readOnly || !onDecline}
             data-testid="button-quote-declined"
           >
             Client Declined
@@ -2032,8 +2082,8 @@ function QuoteSection({
           <Button
             size="lg"
             className="flex-1 h-14"
-            onClick={() => onAccept(notes)}
-            disabled={isPending}
+            onClick={() => onAccept?.(notes)}
+            disabled={isPending || readOnly || !onAccept}
             data-testid="button-quote-accepted"
           >
             {isPending ? (
@@ -2053,10 +2103,12 @@ function PreAssessmentSection({
   inquiryId,
   onComplete,
   isPending,
+  readOnly = false,
 }: {
   inquiryId: number;
-  onComplete: (notes: string) => void;
+  onComplete?: (notes: string) => void;
   isPending: boolean;
+  readOnly?: boolean;
 }) {
   const [notes, setNotes] = useState("");
 
@@ -2091,6 +2143,7 @@ function PreAssessmentSection({
           />
         </div>
 
+        {!readOnly && onComplete && (
         <Button
           size="lg"
           className="w-full h-14"
@@ -2110,6 +2163,7 @@ function PreAssessmentSection({
             </>
           )}
         </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -2130,14 +2184,16 @@ function SchedulingFormWrapper({
   isPending,
   onCopy,
   copied,
+  readOnly = false,
 }: {
   inquiry: Inquiry;
-  onSubmit: (data: z.infer<typeof schedulingSchema>) => void;
-  onAdmit: () => void;
-  onLost: () => void;
+  onSubmit?: (data: z.infer<typeof schedulingSchema>) => void;
+  onAdmit?: () => void;
+  onLost?: () => void;
   isPending: boolean;
   onCopy: () => void;
   copied: boolean;
+  readOnly?: boolean;
 }) {
   const { toast } = useToast();
   
@@ -2154,10 +2210,10 @@ function SchedulingFormWrapper({
     },
   });
 
-  const handleSubmitAndNotify = async (data: z.infer<typeof schedulingSchema>) => {
+  const handleSubmitAndNotify = onSubmit ? async (data: z.infer<typeof schedulingSchema>) => {
     onSubmit(data);
     notifyMutation.mutate();
-  };
+  } : undefined;
 
   return (
     <SchedulingForm
@@ -2165,6 +2221,7 @@ function SchedulingFormWrapper({
       onSubmit={handleSubmitAndNotify}
       onAdmit={onAdmit}
       onLost={onLost}
+      readOnly={readOnly}
       isPending={isPending}
       onCopy={onCopy}
       copied={copied}
@@ -2182,15 +2239,17 @@ function SchedulingForm({
   onCopy,
   copied,
   isNotifying,
+  readOnly = false,
 }: {
   inquiry: Inquiry;
-  onSubmit: (data: z.infer<typeof schedulingSchema>) => void;
-  onAdmit: () => void;
-  onLost: () => void;
+  onSubmit?: (data: z.infer<typeof schedulingSchema>) => void;
+  onAdmit?: () => void;
+  onLost?: () => void;
   isPending: boolean;
   onCopy: () => void;
   copied: boolean;
   isNotifying: boolean;
+  readOnly?: boolean;
 }) {
   const form = useForm({
     resolver: zodResolver(schedulingSchema),
@@ -2219,7 +2278,8 @@ function SchedulingForm({
       </CardHeader>
       <CardContent className="space-y-6">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={onSubmit ? form.handleSubmit(onSubmit) : (e) => e.preventDefault()} className="space-y-6">
+            <fieldset disabled={readOnly}>
             <div className="grid gap-6 sm:grid-cols-2">
               <FormField
                 control={form.control}
@@ -2323,6 +2383,7 @@ function SchedulingForm({
               )}
               Send Schedule Email to Staff
             </Button>
+            </fieldset>
           </form>
         </Form>
 
