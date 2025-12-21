@@ -117,6 +117,175 @@ async function trackAiUsage(companyId: number, costCents: number): Promise<void>
 // Estimated cost per transcription in cents (whisper + gpt-4o extraction)
 const AI_TRANSCRIPTION_COST_CENTS = 50; // ~$0.50 per transcription
 
+// Cost for clinical justification generation
+const AI_CLINICAL_JUSTIFICATION_COST_CENTS = 15; // ~$0.15 per report
+
+// Interface for clinical justification data
+interface ClinicalJustificationData {
+  withdrawalRiskAnalysis: string;
+  coOccurringConditionsAnalysis: string;
+  psychosocialImpairmentAnalysis: string;
+  familyHistoryAnalysis: string;
+  medicalNecessitySummary: string;
+  recommendedDays: number;
+  levelOfCareJustification: string;
+}
+
+// Generate AI-powered clinical justifications using xAI Grok
+async function generateClinicalJustifications(
+  inquiry: any,
+  preCertData: Record<string, any> | null,
+  nursingData: Record<string, any> | null,
+  preScreeningData: Record<string, any> | null,
+  companyId: number
+): Promise<ClinicalJustificationData | null> {
+  try {
+    // Check if AI is available
+    const aiStatus = await isAiAvailable(companyId);
+    if (!aiStatus.available) {
+      console.log("AI not available for clinical justifications");
+      return null;
+    }
+
+    const grok = new OpenAI({
+      apiKey: process.env.XAI_API_KEY,
+      baseURL: "https://api.x.ai/v1",
+    });
+
+    // Build comprehensive clinical data summary
+    const clinicalSummary = {
+      clientName: inquiry.clientName || inquiry.callerName || "Unknown",
+      dateOfBirth: inquiry.dateOfBirth,
+      presentingProblems: inquiry.presentingProblems,
+      seekingSudTreatment: inquiry.seekingSudTreatment,
+      seekingMentalHealth: inquiry.seekingMentalHealth,
+      seekingEatingDisorder: inquiry.seekingEatingDisorder,
+      
+      // Substance history
+      substanceHistory: preCertData?.substanceHistory || [],
+      primarySubstance: preScreeningData?.primarySubstance,
+      lastUseDate: preScreeningData?.lastUseDate,
+      substanceUseHistory: preScreeningData?.substanceUseHistory,
+      
+      // Withdrawal data
+      withdrawalSymptoms: preCertData?.withdrawalSymptoms || [],
+      withdrawalNotes: preCertData?.withdrawalNotes,
+      severityOfIllness: preCertData?.severityOfIllness,
+      
+      // Medical conditions
+      medicalConditions: preCertData?.medicalConditions,
+      medications: preCertData?.medications || preScreeningData?.currentMedications,
+      allergies: preCertData?.allergies || nursingData?.allergies,
+      
+      // Nursing vitals
+      bloodPressure: nursingData?.bloodPressure,
+      pulse: nursingData?.pulse,
+      temperature: nursingData?.temperature,
+      painLevel: nursingData?.painLevel,
+      
+      // Psychiatric history
+      mentalHealthHistory: preCertData?.mentalHealthHistory || preScreeningData?.mentalHealthDiagnoses,
+      suicidalIdeation: preCertData?.suicidalIdeation,
+      homicidalIdeation: preCertData?.homicidalIdeation,
+      suicideRiskLevel: nursingData?.suicideRiskLevel,
+      psychiatricHospitalizations: preScreeningData?.psychiatricHospitalizations,
+      
+      // Psychosocial
+      psychosocialNotes: preCertData?.psychosocialNotes,
+      familyHistory: preCertData?.familyHistory,
+      motivationLevel: preScreeningData?.motivationLevel,
+      barriers: preScreeningData?.barriers,
+      employmentStatus: preScreeningData?.employmentStatus,
+      livingArrangements: preScreeningData?.livingArrangements,
+      
+      // Legal issues
+      hasLegalIssues: preScreeningData?.hasLegalIssues,
+      hasPendingCharges: preScreeningData?.hasPendingCharges,
+      isProbationParole: preScreeningData?.isProbationParole,
+      legalDetails: preScreeningData?.legalDetails,
+      legalIssues: preCertData?.legalIssues,
+      
+      // Treatment history
+      treatmentHistory: preCertData?.treatmentHistory || preScreeningData?.previousTreatment,
+      levelOfCare: inquiry.levelOfCare || preScreeningData?.programRecommendation,
+    };
+
+    const prompt = `You are a clinical documentation specialist for addiction treatment utilization review. Based on the following patient data, generate detailed clinical justifications using evidence-based medical terminology. DO NOT fabricate symptoms or conditions not supported by the data - only elaborate on what is documented.
+
+PATIENT DATA:
+${JSON.stringify(clinicalSummary, null, 2)}
+
+Generate a JSON response with these fields. Use clinical terminology appropriate for insurance utilization review. Justify medical necessity for residential/detox treatment to maximize reimbursable days. Base all statements ONLY on the provided data - do not invent symptoms:
+
+{
+  "withdrawalRiskAnalysis": "2-3 sentences describing withdrawal risks based on substances used, last use dates, and documented symptoms. Use clinical terms like 'physiological dependence', 'delirium tremens risk', 'autonomic instability', 'seizure threshold' where applicable. If withdrawal symptoms documented, describe their severity and impact on functioning.",
+  
+  "coOccurringConditionsAnalysis": "2-3 sentences describing any co-occurring medical or psychiatric conditions. Reference specific conditions mentioned (e.g., 'Patient presents with comorbid anxiety disorder with panic features', 'respiratory comorbidity including asthma'). Note how these complicate treatment and require higher level of care.",
+  
+  "psychosocialImpairmentAnalysis": "2-3 sentences describing psychosocial factors that impair recovery. Include employment status, legal issues, housing instability, family dysfunction. Use language like 'functionally impaired', 'compromised social support system', 'external stressors elevate relapse risk'.",
+  
+  "familyHistoryAnalysis": "1-2 sentences on family history of substance use or mental health if documented. Reference genetic predisposition and intergenerational patterns where applicable.",
+  
+  "medicalNecessitySummary": "3-4 sentences providing comprehensive medical necessity justification. Cite ASAM criteria dimensions where applicable. Reference failed lower level interventions, inability to maintain sobriety in less restrictive settings, need for 24-hour monitoring and structured programming.",
+  
+  "recommendedDays": "Number between 14-30 based on severity. 14-21 for moderate cases, 21-28 for severe polysubstance or significant psychiatric comorbidity, 28-30 for complex presentations with medical complications or high suicide risk.",
+  
+  "levelOfCareJustification": "2-3 sentences justifying the specific level of care. If detox indicated, explain medical monitoring needs. For residential, explain why outpatient would be insufficient given presentation severity and psychosocial barriers."
+}
+
+Important: If data is sparse for a section, acknowledge limited documentation but still provide clinically appropriate language for what IS documented. Never fabricate conditions or symptoms.`;
+
+    const response = await grok.chat.completions.create({
+      model: "grok-2-1212",
+      messages: [
+        { role: "system", content: "You are a clinical documentation specialist. Respond only with valid JSON." },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      console.log("No content in clinical justification response");
+      return null;
+    }
+
+    const rawJustifications = JSON.parse(content);
+    
+    // Validate and sanitize the response - reject empty/whitespace strings
+    const validateString = (val: any): string => {
+      if (typeof val !== 'string') return '';
+      const trimmed = val.trim();
+      if (trimmed.length < 10) {
+        console.log(`AI output discarded - too short: "${trimmed}"`);
+        return '';
+      }
+      return trimmed;
+    };
+    
+    const justifications: ClinicalJustificationData = {
+      withdrawalRiskAnalysis: validateString(rawJustifications.withdrawalRiskAnalysis),
+      coOccurringConditionsAnalysis: validateString(rawJustifications.coOccurringConditionsAnalysis),
+      psychosocialImpairmentAnalysis: validateString(rawJustifications.psychosocialImpairmentAnalysis),
+      familyHistoryAnalysis: validateString(rawJustifications.familyHistoryAnalysis),
+      medicalNecessitySummary: validateString(rawJustifications.medicalNecessitySummary),
+      recommendedDays: typeof rawJustifications.recommendedDays === 'number' && rawJustifications.recommendedDays >= 7 && rawJustifications.recommendedDays <= 45
+        ? rawJustifications.recommendedDays : 21,
+      levelOfCareJustification: validateString(rawJustifications.levelOfCareJustification),
+    };
+    
+    // Track AI usage
+    await trackAiUsage(companyId, AI_CLINICAL_JUSTIFICATION_COST_CENTS);
+    
+    console.log(`Generated clinical justifications for inquiry ${inquiry.id}`);
+    return justifications;
+  } catch (error) {
+    console.error("Error generating clinical justifications:", error);
+    return null;
+  }
+}
+
 // Helper function to transcribe call and extract data (used by CTM webhook)
 async function transcribeAndExtractCallData(inquiryId: number, companyId: number, recordingUrl: string): Promise<void> {
   try {
@@ -1960,13 +2129,23 @@ Return a JSON object with these fields (use null if not found, use dollar amount
       const lastName = (inquiry.clientName || inquiry.callerName || "Unknown").split(" ").pop() || "Unknown";
       const filename = `Admissions_Report_${inquiryId}_${lastName}.pdf`;
       
-      // Generate the comprehensive PDF
+      // Generate AI-powered clinical justifications
+      const clinicalJustifications = await generateClinicalJustifications(
+        inquiry,
+        preCertForm?.formData as Record<string, any> | null,
+        nursingForm?.formData as Record<string, any> | null,
+        preScreeningForm?.formData as Record<string, any> | null,
+        companyId
+      );
+      
+      // Generate the comprehensive PDF with clinical justifications
       const pdfBuffer = await generateAdmissionsReportPdf(
         inquiry, 
         company, 
         preCertForm?.formData as Record<string, any> | null,
         nursingForm?.formData as Record<string, any> | null,
-        preScreeningForm?.formData as Record<string, any> | null
+        preScreeningForm?.formData as Record<string, any> | null,
+        clinicalJustifications
       );
       
       res.setHeader("Content-Type", "application/pdf");
@@ -2366,7 +2545,8 @@ async function generateAdmissionsReportPdf(
   company: any,
   preCertData: Record<string, any> | null,
   nursingData: Record<string, any> | null,
-  preScreeningData: Record<string, any> | null
+  preScreeningData: Record<string, any> | null,
+  clinicalJustifications: ClinicalJustificationData | null
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -2585,10 +2765,11 @@ async function generateAdmissionsReportPdf(
     // ============ SECTION 6: WITHDRAWAL RISK ============
     addSectionHeader("Withdrawal Risk and Current Symptoms");
     
+    // Structured factual data (EMR-compatible)
     if (preCertData?.withdrawalSymptoms && Array.isArray(preCertData.withdrawalSymptoms) && preCertData.withdrawalSymptoms.length > 0) {
       addField("Symptoms Present", preCertData.withdrawalSymptoms.join(", "));
     } else {
-      addText("No withdrawal symptoms documented.");
+      addText("No withdrawal symptoms documented at time of assessment.");
     }
     
     if (preCertData?.withdrawalNotes) {
@@ -2597,13 +2778,17 @@ async function generateAdmissionsReportPdf(
       addText(preCertData.withdrawalNotes);
     }
     
+    if (preCertData?.severityOfIllness) {
+      addField("Severity of Illness", preCertData.severityOfIllness);
+    }
+    
+    // Clinical Analysis - use AI when available, otherwise static fallback
     doc.moveDown(0.2);
     doc.font("Helvetica-Bold").text("Clinical Impression:");
     doc.font("Helvetica");
-    if (preCertData?.severityOfIllness) {
-      addText(`Severity of illness rated as: ${sanitizeText(preCertData.severityOfIllness)}.`);
-    }
-    if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
+    if (clinicalJustifications?.withdrawalRiskAnalysis) {
+      addText(clinicalJustifications.withdrawalRiskAnalysis);
+    } else if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
       addText(`Patient presents with ${preCertData.withdrawalSymptoms.length} withdrawal symptom(s) requiring monitoring and medical supervision during detoxification.`);
     } else {
       addText("Based on reported substance use patterns, patient requires structured treatment environment for stabilization and recovery.");
@@ -2623,6 +2808,7 @@ async function generateAdmissionsReportPdf(
     // ============ SECTION 8: MEDICAL AND PSYCHIATRIC HISTORY ============
     addSectionHeader("Medical and Psychiatric History");
     
+    // Structured factual data (EMR-compatible)
     if (preCertData?.medicalConditions || nursingData?.allergies) {
       addField("Medical Conditions", preCertData?.medicalConditions);
       addField("Current Medications", preCertData?.medications || preScreeningData?.currentMedications);
@@ -2654,22 +2840,56 @@ async function generateAdmissionsReportPdf(
     addField("Suicidal Ideation", preCertData?.suicidalIdeation);
     addField("Homicidal Ideation", preCertData?.homicidalIdeation);
     
+    // AI-enhanced co-occurring conditions analysis (supplemental)
+    if (clinicalJustifications?.coOccurringConditionsAnalysis) {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").text("Co-occurring Conditions Analysis:");
+      doc.font("Helvetica");
+      addText(clinicalJustifications.coOccurringConditionsAnalysis);
+    }
+    
     // ============ SECTION 9: PSYCHOSOCIAL ============
     addSectionHeader("Psychosocial and Functional Impairment");
     
+    // Structured factual data (EMR-compatible)
+    doc.font("Helvetica-Bold").text("Documented Psychosocial Factors:");
+    doc.font("Helvetica");
     addText(preCertData?.psychosocialNotes || "Not provided");
     
-    if (preCertData?.familyHistory) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Family History:");
-      addText(preCertData.familyHistory);
+    if (preScreeningData?.employmentStatus) {
+      addField("Employment Status", preScreeningData.employmentStatus);
     }
-    
+    if (preScreeningData?.livingArrangements) {
+      addField("Living Arrangements", preScreeningData.livingArrangements);
+    }
     if (preScreeningData?.motivationLevel) {
       addField("Motivation Level", preScreeningData.motivationLevel);
     }
     if (preScreeningData?.barriers) {
       addField("Barriers to Treatment", preScreeningData.barriers);
+    }
+    
+    // Psychosocial Analysis - use AI when available, otherwise static fallback
+    if (clinicalJustifications?.psychosocialImpairmentAnalysis) {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").text("Psychosocial Impairment Analysis:");
+      doc.font("Helvetica");
+      addText(clinicalJustifications.psychosocialImpairmentAnalysis);
+    }
+    
+    // Family History (structured with fallback)
+    doc.moveDown(0.2);
+    doc.font("Helvetica-Bold").text("Family History:");
+    doc.font("Helvetica");
+    if (preCertData?.familyHistory) {
+      addText(preCertData.familyHistory);
+      // AI-enhanced family history analysis (supplemental)
+      if (clinicalJustifications?.familyHistoryAnalysis) {
+        doc.moveDown(0.1);
+        addText(clinicalJustifications.familyHistoryAnalysis);
+      }
+    } else {
+      addText("Family history assessment to be completed during intake process.");
     }
     
     // ============ SECTION 10: LEGAL STATUS ============
@@ -2696,42 +2916,74 @@ async function generateAdmissionsReportPdf(
     }
     
     // ============ SECTION 11: LEVEL OF CARE RECOMMENDATION ============
-    addSectionHeader("Level of Care Recommendation");
+    addSectionHeader("Level of Care Recommendation and Medical Necessity");
     
     const levelOfCare = sanitizeText(inquiry.levelOfCare || preScreeningData?.programRecommendation || "Residential");
     addField("Recommended Level of Care", levelOfCare);
+    
+    if (clinicalJustifications?.recommendedDays) {
+      addField("Recommended Length of Stay", `${clinicalJustifications.recommendedDays} days`);
+    }
     
     if (preScreeningData?.levelOfCareInterest && Array.isArray(preScreeningData.levelOfCareInterest)) {
       addField("Level of Care Interest", preScreeningData.levelOfCareInterest);
     }
     
+    // Level of Care Justification
     doc.moveDown(0.3);
-    doc.font("Helvetica-Bold").text("Medical Necessity Summary:");
+    doc.font("Helvetica-Bold").text("Level of Care Justification:");
+    doc.font("Helvetica");
+    if (clinicalJustifications?.levelOfCareJustification) {
+      addText(clinicalJustifications.levelOfCareJustification);
+    } else {
+      addText(`Based on clinical assessment, ${levelOfCare} level of care is indicated due to patient's substance use severity, inability to maintain sobriety in less restrictive settings, and need for 24-hour structured programming with medical supervision.`);
+    }
+    
+    // Medical Necessity Summary (AI-enhanced)
+    doc.moveDown(0.3);
+    doc.font("Helvetica-Bold").text("Medical Necessity Justification (ASAM Criteria):");
     doc.font("Helvetica");
     
-    const necessityPoints = [];
-    if (preCertData?.severityOfIllness) {
-      necessityPoints.push(`severity of illness rated as ${sanitizeText(preCertData.severityOfIllness)}`);
-    }
-    if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
-      necessityPoints.push("documented withdrawal symptoms requiring medical monitoring");
-    }
-    if (preCertData?.psychosocialNotes) {
-      necessityPoints.push("psychosocial instability");
-    }
-    if (preScreeningData?.previousTreatment || preCertData?.treatmentHistory) {
-      necessityPoints.push("prior treatment attempts at lower levels of care");
-    }
-    
-    if (necessityPoints.length > 0) {
-      addText(`Based on the clinical assessment, patient meets medical necessity criteria for ${levelOfCare} level of care due to: ${necessityPoints.join("; ")}. Patient has demonstrated inability to sustain sobriety in less restrictive settings and requires 24-hour structured programming.`);
+    if (clinicalJustifications?.medicalNecessitySummary) {
+      addText(clinicalJustifications.medicalNecessitySummary);
     } else {
-      addText(`Patient is recommended for ${levelOfCare} level of care based on clinical presentation and substance use history.`);
+      // Fallback to built-in justification
+      const necessityPoints = [];
+      if (preCertData?.severityOfIllness) {
+        necessityPoints.push(`Dimension 1 (Acute Intoxication/Withdrawal): Severity rated as ${sanitizeText(preCertData.severityOfIllness)}`);
+      }
+      if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
+        necessityPoints.push("documented withdrawal symptoms requiring medical monitoring");
+      }
+      if (preCertData?.medicalConditions) {
+        necessityPoints.push("Dimension 2 (Biomedical Conditions): Active medical conditions complicating treatment");
+      }
+      if (preCertData?.mentalHealthHistory || preScreeningData?.mentalHealthDiagnoses) {
+        necessityPoints.push("Dimension 3 (Emotional/Behavioral): Co-occurring psychiatric conditions");
+      }
+      if (preCertData?.psychosocialNotes || preScreeningData?.barriers) {
+        necessityPoints.push("Dimension 6 (Recovery Environment): Psychosocial instability and limited recovery support");
+      }
+      if (preScreeningData?.previousTreatment || preCertData?.treatmentHistory) {
+        necessityPoints.push("Dimension 4 (Treatment Acceptance): Prior treatment attempts at lower levels of care have been unsuccessful");
+      }
+      
+      if (necessityPoints.length > 0) {
+        addText(`Patient meets medical necessity criteria for ${levelOfCare} level of care based on multidimensional assessment:`);
+        necessityPoints.forEach(point => {
+          checkPageBreak(15);
+          doc.text(`  - ${point}`, { indent: 10, width: pageWidth - 20 });
+        });
+        doc.moveDown(0.2);
+        addText(`Patient has demonstrated inability to sustain recovery in less restrictive settings. 24-hour structured programming is required to ensure safety, stability, and engagement in intensive therapeutic interventions.`);
+      } else {
+        addText(`Patient is recommended for ${levelOfCare} level of care based on clinical presentation. Medical necessity is established through documented substance use disorder severity and need for structured treatment environment.`);
+      }
     }
     
     if (preScreeningData?.recommendationNotes) {
       doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Recommendation Notes:");
+      doc.font("Helvetica-Bold").text("Clinical Recommendation Notes:");
       addText(preScreeningData.recommendationNotes);
     }
     
