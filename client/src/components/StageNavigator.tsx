@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   Phone, 
@@ -10,8 +9,6 @@ import {
   UserCheck, 
   CheckCircle2,
   Circle,
-  Download,
-  Loader2,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -42,16 +39,12 @@ interface StageNavigatorProps {
   inquiryId: number;
   currentStage: PipelineStage;
   onStageClick?: (stage: PipelineStage) => void;
-  onDownloadDocs?: () => void;
-  isDownloading?: boolean;
 }
 
 export function StageNavigator({
   inquiryId,
   currentStage,
   onStageClick,
-  onDownloadDocs,
-  isDownloading = false,
 }: StageNavigatorProps) {
   // Default to expanded to show progress immediately
   const [isExpanded, setIsExpanded] = useState(true);
@@ -158,25 +151,6 @@ export function StageNavigator({
             })}
           </div>
 
-          {currentStage === "admitted" && onDownloadDocs && (
-            <div className="pt-3 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={onDownloadDocs}
-                disabled={isDownloading}
-                data-testid="button-download-docs"
-              >
-                {isDownloading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                Download All Documents
-              </Button>
-            </div>
-          )}
         </div>
       )}
     </div>

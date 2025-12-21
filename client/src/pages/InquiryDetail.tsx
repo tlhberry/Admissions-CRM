@@ -104,7 +104,6 @@ export default function InquiryDetail() {
   const { toast } = useToast();
   const [showNonViableDialog, setShowNonViableDialog] = useState(false);
   const [showLostDialog, setShowLostDialog] = useState(false);
-  const [isDownloadingDocs, setIsDownloadingDocs] = useState(false);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -247,42 +246,6 @@ export default function InquiryDetail() {
       } catch (error) {
         // Error toast is handled by mutation's onError
       }
-    }
-  };
-
-  const handleDownloadDocs = async () => {
-    if (!id) return;
-    setIsDownloadingDocs(true);
-    try {
-      const response = await fetch(`/api/inquiries/${id}/download-docs`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to download documents");
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const disposition = response.headers.get("Content-Disposition");
-      const filename = disposition?.match(/filename="(.+)"/)?.[1] || "documents.zip";
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast({
-        title: "Download Started",
-        description: "Your documents are being downloaded.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to download documents. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDownloadingDocs(false);
     }
   };
 
@@ -456,8 +419,6 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
           inquiryId={parseInt(id!)}
           currentStage={stage!}
           onStageClick={handleStageClick}
-          onDownloadDocs={handleDownloadDocs}
-          isDownloading={isDownloadingDocs}
         />
 
         {/* Show indicator when viewing a different stage */}
