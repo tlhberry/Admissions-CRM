@@ -2,10 +2,9 @@ import type { Express, Request, Response } from "express";
 import OpenAI from "openai";
 import { chatStorage } from "./storage";
 
-// xAI Grok API client (OpenAI-compatible)
-const grok = new OpenAI({
-  apiKey: process.env.XAI_API_KEY,
-  baseURL: "https://api.x.ai/v1",
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
 export function registerChatRoutes(app: Express): void {
