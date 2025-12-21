@@ -392,9 +392,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: "VOB text content is required" });
       }
 
-      const openai = new OpenAI({
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      // xAI Grok API client (OpenAI-compatible)
+      const grok = new OpenAI({
+        apiKey: process.env.XAI_API_KEY,
+        baseURL: "https://api.x.ai/v1",
       });
 
       const systemPrompt = `You are an expert insurance verification specialist for addiction treatment centers. Analyze the following VOB (Verification of Benefits) document and extract key insurance information.
@@ -420,8 +421,8 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   "vobSummary": "brief summary of key coverage findings"
 }`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+      const response = await grok.chat.completions.create({
+        model: "grok-2-1212",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Please analyze this VOB document:\n\n${vobText}` }
@@ -1235,113 +1236,14 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         return res.status(400).json({ message: "No call recording URL available for this inquiry" });
       }
 
-      const openai = new OpenAI({
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-      });
-
-      // Download the audio file
-      console.log(`Transcribing call recording: ${inquiry.callRecordingUrl}`);
-      const audioResponse = await fetch(inquiry.callRecordingUrl);
-      if (!audioResponse.ok) {
-        return res.status(400).json({ message: "Failed to download call recording" });
-      }
-
-      const audioBuffer = await audioResponse.arrayBuffer();
-      const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
-      const audioFile = new File([audioBlob], "recording.mp3", { type: "audio/mpeg" });
-
-      // Transcribe with Whisper
-      const transcriptionResponse = await openai.audio.transcriptions.create({
-        file: audioFile,
-        model: "whisper-1",
-        response_format: "text",
-      });
-
-      const transcription = transcriptionResponse;
-      console.log(`Transcription completed: ${transcription.substring(0, 200)}...`);
-
-      // Extract data from transcription using GPT
-      const extractionPrompt = `You are an addiction treatment center admissions specialist. Analyze this call transcription and extract key information.
-
-Return a JSON object with these fields (use null if not clearly mentioned):
-{
-  "callerName": "Full name of the caller or person calling on behalf of client",
-  "clientName": "Name of the person seeking treatment (may be same as caller)",
-  "phoneNumber": "Phone number if mentioned",
-  "email": "Email address if mentioned",
-  "insuranceProvider": "Insurance company name",
-  "insurancePolicyId": "Insurance policy or member ID",
-  "presentingIssues": "Brief description of substance use or mental health issues mentioned",
-  "urgency": "low", "medium", or "high" based on crisis indicators,
-  "callSummary": "2-3 sentence professional summary of the call suitable for clinical staff"
-}
-
-Transcription:
-${transcription}`;
-
-      const extractionResponse = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: extractionPrompt }
-        ],
-        response_format: { type: "json_object" },
-      });
-
-      const extractedContent = extractionResponse.choices[0]?.message?.content;
-      if (!extractedContent) {
-        return res.status(500).json({ message: "Failed to extract data from transcription" });
-      }
-
-      const extractedData = JSON.parse(extractedContent);
-      console.log("Extracted data:", extractedData);
-
-      // Update inquiry with transcription and extracted data
-      const updateData: any = {
-        transcription,
-        aiExtractedData: extractedData,
-        callSummary: extractedData.callSummary || null,
-      };
-
-      // Only update fields that are currently empty and have extracted values
-      if (!inquiry.callerName && extractedData.callerName) {
-        updateData.callerName = extractedData.callerName;
-      }
-      if (!inquiry.clientName && extractedData.clientName) {
-        updateData.clientName = extractedData.clientName;
-      }
-      if (!inquiry.email && extractedData.email) {
-        updateData.email = extractedData.email;
-      }
-      if (!inquiry.insuranceProvider && extractedData.insuranceProvider) {
-        updateData.insuranceProvider = extractedData.insuranceProvider;
-      }
-      if (!inquiry.insurancePolicyId && extractedData.insurancePolicyId) {
-        updateData.insurancePolicyId = extractedData.insurancePolicyId;
-      }
-
-      // Append presenting issues to initial notes if available
-      if (extractedData.presentingIssues) {
-        const existingNotes = inquiry.initialNotes || "";
-        const separator = existingNotes ? "\n\n---\nAI-Extracted Issues: " : "AI-Extracted Issues: ";
-        updateData.initialNotes = existingNotes + separator + extractedData.presentingIssues;
-      }
-
-      const updatedInquiry = await storage.updateInquiry(id, companyId, updateData);
-
-      // Track AI usage
-      await trackAiUsage(companyId, AI_TRANSCRIPTION_COST_CENTS);
-
-      res.json({
-        success: true,
-        message: "Call transcribed and data extracted successfully",
-        transcription,
-        extractedData,
-        updatedFields: Object.keys(updateData),
+      // Audio transcription not available with xAI Grok yet
+      return res.status(503).json({ 
+        message: "Audio transcription is temporarily unavailable. xAI is working on adding speech-to-text capabilities.",
+        aiDisabled: true 
       });
     } catch (error) {
-      console.error("Error transcribing call:", error);
-      res.status(500).json({ message: "Failed to transcribe call recording" });
+      console.error("Error in transcription endpoint:", error);
+      res.status(500).json({ message: "Failed to process request" });
     }
   });
 
