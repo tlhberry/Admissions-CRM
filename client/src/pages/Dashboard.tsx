@@ -390,7 +390,11 @@ export default function Dashboard() {
             return (
               <Card key={stage} className="overflow-visible">
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => navigate(`/pipeline/${stage}`)}
+                    className="flex items-center justify-between gap-2 w-full text-left hover-elevate rounded-md p-1 -m-1"
+                    data-testid={`button-stage-${stage}`}
+                  >
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stageColors[stage]}`}>
                         <StageIcon className="w-5 h-5" />
@@ -399,12 +403,16 @@ export default function Dashboard() {
                         <CardTitle className="text-base font-semibold">
                           {stageDisplayNames[stage]}
                         </CardTitle>
+                        <p className="text-xs text-muted-foreground">Click to expand</p>
                       </div>
                     </div>
-                    <Badge variant="secondary" className="text-sm">
-                      {isLoading ? "-" : stageInquiries.length}
-                    </Badge>
-                  </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-sm">
+                        {isLoading ? "-" : stageInquiries.length}
+                      </Badge>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </button>
                 </CardHeader>
                 <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
                   {isLoading ? (
@@ -461,19 +469,29 @@ export default function Dashboard() {
 
           <Card className="overflow-visible border-green-200 dark:border-green-800">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => navigate("/pipeline/admitted")}
+                className="flex items-center justify-between gap-2 w-full text-left hover-elevate rounded-md p-1 -m-1"
+                data-testid="button-stage-admitted"
+              >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stageColors.admitted}`}>
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
-                  <CardTitle className="text-base font-semibold">
-                    {stageDisplayNames.admitted}
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="text-base font-semibold">
+                      {stageDisplayNames.admitted}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">Click to expand</p>
+                  </div>
                 </div>
-                <Badge variant="secondary" className="text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                  {isLoading ? "-" : admittedCount}
-                </Badge>
-              </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                    {isLoading ? "-" : admittedCount}
+                  </Badge>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </button>
             </CardHeader>
             <CardContent className="max-h-[400px] overflow-y-auto">
               {isLoading ? (
@@ -545,19 +563,29 @@ export default function Dashboard() {
 
           <Card className="overflow-visible border-red-200 dark:border-red-800">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => navigate("/pipeline/non_viable")}
+                className="flex items-center justify-between gap-2 w-full text-left hover-elevate rounded-md p-1 -m-1"
+                data-testid="button-stage-non_viable"
+              >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stageColors.non_viable}`}>
                     <XCircle className="w-5 h-5" />
                   </div>
-                  <CardTitle className="text-base font-semibold">
-                    {stageDisplayNames.non_viable}
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="text-base font-semibold">
+                      {stageDisplayNames.non_viable}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">Click to expand</p>
+                  </div>
                 </div>
-                <Badge variant="secondary" className="text-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                  {isLoading ? "-" : nonViableCount}
-                </Badge>
-              </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                    {isLoading ? "-" : nonViableCount}
+                  </Badge>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </button>
             </CardHeader>
             <CardContent className="max-h-[400px] overflow-y-auto">
               {isLoading ? (

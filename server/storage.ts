@@ -91,6 +91,8 @@ export interface IStorage {
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
   updateInquiry(id: number, companyId: number, data: UpdateInquiry): Promise<Inquiry | undefined>;
   deleteInquiry(id: number, companyId: number): Promise<void>;
+  bulkUpdateInquiryStage(ids: number[], companyId: number, stage: string): Promise<number>;
+  bulkDeleteInquiries(ids: number[], companyId: number): Promise<number>;
   
   // Referral Account operations
   getReferralAccount(id: number, companyId: number): Promise<ReferralAccount | undefined>;
@@ -341,6 +343,29 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInquiry(id: number, companyId: number): Promise<void> {
     await db.delete(inquiries).where(and(eq(inquiries.id, id), eq(inquiries.companyId, companyId)));
+  }
+
+  async bulkUpdateInquiryStage(ids: number[], companyId: number, stage: string): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .update(inquiries)
+      .set({ stage, updatedAt: new Date() })
+      .where(and(
+        eq(inquiries.companyId, companyId),
+        or(...ids.map(id => eq(inquiries.id, id)))!
+      ));
+    return ids.length;
+  }
+
+  async bulkDeleteInquiries(ids: number[], companyId: number): Promise<number> {
+    if (ids.length === 0) return 0;
+    await db
+      .delete(inquiries)
+      .where(and(
+        eq(inquiries.companyId, companyId),
+        or(...ids.map(id => eq(inquiries.id, id)))!
+      ));
+    return ids.length;
   }
 
   // Referral Account operations with tenant isolation

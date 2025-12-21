@@ -28,6 +28,7 @@ import {
   insertInquiryStageStatusSchema,
   stageOrder,
   stageDisplayNames,
+  pipelineStages,
   type User,
   normalizePhoneE164,
 } from "@shared/schema";
@@ -681,6 +682,74 @@ Return a JSON object with these fields (use null if not found, use dollar amount
     } catch (error) {
       console.error("Error deleting inquiry:", error);
       res.status(500).json({ message: "Failed to delete inquiry" });
+    }
+  });
+
+  // Bulk update inquiry stages
+  app.patch("/api/inquiries/bulk-stage", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const { inquiryIds, targetStage } = req.body;
+      
+      if (!Array.isArray(inquiryIds) || inquiryIds.length === 0) {
+        return res.status(400).json({ message: "inquiryIds must be a non-empty array" });
+      }
+      
+      if (!targetStage || typeof targetStage !== "string") {
+        return res.status(400).json({ message: "targetStage is required" });
+      }
+
+      // Validate targetStage is a valid pipeline stage
+      if (!pipelineStages.includes(targetStage as any)) {
+        return res.status(400).json({ message: "Invalid target stage" });
+      }
+
+      const validIds = inquiryIds.filter((id: any) => typeof id === "number" && !isNaN(id));
+      if (validIds.length === 0) {
+        return res.status(400).json({ message: "No valid inquiry IDs provided" });
+      }
+
+      const count = await storage.bulkUpdateInquiryStage(validIds, companyId, targetStage);
+      
+      // Audit log for bulk stage update
+      const userId = req.user?.claims?.sub;
+      await logAudit(companyId, userId, "bulk_update", "inquiry", 0, `Bulk stage update: ${validIds.length} inquiries moved to ${targetStage}`, req);
+
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error("Error bulk updating inquiry stages:", error);
+      res.status(500).json({ message: "Failed to update inquiry stages" });
+    }
+  });
+
+  // Bulk delete inquiries
+  app.delete("/api/inquiries/bulk", isAuthenticated, canAccessInquiries, async (req: any, res) => {
+    try {
+      const companyId = await requireCompanyId(req, res);
+      if (!companyId) return;
+
+      const { inquiryIds } = req.body;
+      
+      if (!Array.isArray(inquiryIds) || inquiryIds.length === 0) {
+        return res.status(400).json({ message: "inquiryIds must be a non-empty array" });
+      }
+
+      const validIds = inquiryIds.filter((id: any) => typeof id === "number" && !isNaN(id));
+      if (validIds.length === 0) {
+        return res.status(400).json({ message: "No valid inquiry IDs provided" });
+      }
+
+      // Audit log BEFORE deleting
+      const userId = req.user?.claims?.sub;
+      await logAudit(companyId, userId, "bulk_delete", "inquiry", 0, `Bulk delete: ${validIds.length} inquiries deleted`, req);
+
+      const count = await storage.bulkDeleteInquiries(validIds, companyId);
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error("Error bulk deleting inquiries:", error);
+      res.status(500).json({ message: "Failed to delete inquiries" });
     }
   });
 
