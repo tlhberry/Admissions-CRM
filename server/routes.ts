@@ -2643,12 +2643,12 @@ async function generateAdmissionsReportPdf(
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     
-    // Page dimensions for Letter size with proper margins
-    const margins = { top: 54, bottom: 72, left: 54, right: 54 }; // 0.75in margins
+    // COMPACT: Tight margins for maximum content density (0.5in margins)
+    const margins = { top: 36, bottom: 36, left: 36, right: 36 };
     const doc = new PDFDocument({ 
       margin: margins.left,
       size: "LETTER",
-      bufferPages: false, // Single-pass rendering
+      bufferPages: false,
       autoFirstPage: false
     });
     
@@ -2657,43 +2657,27 @@ async function generateAdmissionsReportPdf(
     doc.on("error", reject);
     
     const facilityName = sanitizeText(company?.name || "Gulf Breeze Recovery");
-    const pageWidth = 612 - margins.left - margins.right; // Letter width minus margins
-    const contentBottom = 792 - margins.bottom - 30; // Leave space for footer
+    const pageWidth = 612 - margins.left - margins.right;
+    const contentBottom = 792 - margins.bottom - 12; // Minimal footer space
     
     let pageNumber = 0;
     
-    // Function to add footer to current page
+    // Minimal footer - just page number, no CONFIDENTIAL text
     const addFooter = () => {
       const savedY = doc.y;
       const savedX = doc.x;
-      
-      // Footer area at fixed position - use lineBreak: false to prevent page creation
-      doc.font("Helvetica").fontSize(8);
-      doc.text(
-        "CONFIDENTIAL - Protected Health Information",
-        margins.left,
-        792 - margins.bottom + 10,
-        { width: pageWidth, align: "center", lineBreak: false }
-      );
-      doc.text(
-        `Page ${pageNumber}`,
-        margins.left,
-        792 - margins.bottom + 22,
-        { width: pageWidth, align: "center", lineBreak: false }
-      );
-      
-      // Restore position and font to defaults
+      doc.font("Helvetica").fontSize(7);
+      doc.text(`Page ${pageNumber}`, margins.left, 792 - margins.bottom + 4, { width: pageWidth, align: "center", lineBreak: false });
       doc.x = savedX;
       doc.y = savedY;
-      doc.font("Helvetica").fontSize(10);
+      doc.font("Helvetica").fontSize(9);
     };
     
-    // Add first page manually
     doc.addPage();
     pageNumber = 1;
     
-    // Check if we need a new page (with space for section header)
-    const checkPageBreak = (requiredSpace: number = 80) => {
+    // Compact page break check
+    const checkPageBreak = (requiredSpace: number = 40) => {
       if (doc.y > contentBottom - requiredSpace) {
         addFooter();
         doc.addPage();
@@ -2702,41 +2686,35 @@ async function generateAdmissionsReportPdf(
       }
     };
     
-    // Helper function to add section headers
+    // COMPACT: Smaller section headers with minimal spacing
     const addSectionHeader = (title: string) => {
-      checkPageBreak(60); // Ensure header + some content fits
-      doc.x = margins.left; // Reset to left margin
-      doc.moveDown(0.4);
-      doc.fontSize(11).font("Helvetica-Bold").text(sanitizeText(title), { width: pageWidth });
-      doc.moveTo(margins.left, doc.y + 2).lineTo(margins.left + pageWidth, doc.y + 2).stroke();
-      doc.moveDown(0.3);
-      doc.font("Helvetica").fontSize(10);
+      checkPageBreak(30);
+      doc.x = margins.left;
+      doc.moveDown(0.15);
+      doc.fontSize(9).font("Helvetica-Bold").text(sanitizeText(title).toUpperCase(), { width: pageWidth });
+      doc.moveDown(0.1);
+      doc.font("Helvetica").fontSize(8);
     };
     
-    // Helper to add field with label
+    // COMPACT: Inline field display
     const addField = (label: string, value: any) => {
-      checkPageBreak(20);
-      doc.x = margins.left; // Ensure left margin
-      doc.font("Helvetica-Bold").text(`${sanitizeText(label)}: `, { continued: true, width: pageWidth });
+      checkPageBreak(12);
+      doc.x = margins.left;
+      doc.font("Helvetica-Bold").fontSize(8).text(`${sanitizeText(label)}: `, { continued: true, width: pageWidth });
       doc.font("Helvetica").text(formatValue(value), { width: pageWidth });
     };
     
-    // Helper to add text block
+    // COMPACT: Smaller text with tight line height
     const addText = (text: string) => {
-      checkPageBreak(20);
-      doc.x = margins.left; // Ensure left margin
-      doc.font("Helvetica").fontSize(10).text(sanitizeText(text), { width: pageWidth });
+      checkPageBreak(12);
+      doc.x = margins.left;
+      doc.font("Helvetica").fontSize(8).text(sanitizeText(text), { width: pageWidth, lineGap: -1 });
     };
     
-    // ============ HEADER ============
-    doc.fontSize(14).font("Helvetica-Bold").text(facilityName, { align: "center" });
-    doc.moveDown(0.2);
-    doc.fontSize(12).text("Admissions Clinical Summary for Utilization Review", { align: "center" });
+    // COMPACT HEADER: Single line facility + title
+    doc.fontSize(11).font("Helvetica-Bold").text(`${facilityName} - Clinical Summary for Utilization Review`, { align: "center" });
+    doc.fontSize(8).font("Helvetica").text(`Generated: ${new Date().toLocaleDateString("en-US")} | Inquiry ID: ${inquiry.id}`, { align: "center" });
     doc.moveDown(0.3);
-    doc.fontSize(10).font("Helvetica")
-      .text(`Date Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, { align: "center" });
-    doc.text(`Inquiry ID: ${inquiry.id}`, { align: "center" });
-    doc.moveDown(1);
     
     // ============ SECTION 1: PATIENT AND CALLER INFO ============
     addSectionHeader("Patient and Caller Information");
@@ -2752,9 +2730,7 @@ async function generateAdmissionsReportPdf(
     addField("Policy ID", inquiry.insurancePolicyId);
     addField("VOB Status", inquiry.vobStatus);
     if (inquiry.coverageDetails) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Coverage Details:");
-      addText(inquiry.coverageDetails);
+      addField("Coverage Details", inquiry.coverageDetails);
     }
     
     // ============ SECTION 3: REFERRAL SOURCE ============
@@ -2772,370 +2748,183 @@ async function generateAdmissionsReportPdf(
     // ============ SECTION 4: PRESENTING PROBLEMS ============
     addSectionHeader("Presenting Problems and Current Risks");
     addText(inquiry.presentingProblems || "Not provided");
-    
-    doc.moveDown(0.2);
     const treatmentTypes = [];
-    if (inquiry.seekingSudTreatment === "yes") treatmentTypes.push("Substance Use Treatment");
-    if (inquiry.seekingMentalHealth === "yes") treatmentTypes.push("Mental Health Treatment");
-    if (inquiry.seekingEatingDisorder === "yes") treatmentTypes.push("Eating Disorder Treatment");
-    addField("Treatment Types Sought", treatmentTypes.length > 0 ? treatmentTypes.join(", ") : "Not specified");
-    
-    if (preCertData?.suicidalIdeation) {
-      addField("Suicidal Ideation", preCertData.suicidalIdeation);
-    }
-    if (preCertData?.homicidalIdeation) {
-      addField("Homicidal Ideation", preCertData.homicidalIdeation);
-    }
+    if (inquiry.seekingSudTreatment === "yes") treatmentTypes.push("SUD");
+    if (inquiry.seekingMentalHealth === "yes") treatmentTypes.push("MH");
+    if (inquiry.seekingEatingDisorder === "yes") treatmentTypes.push("ED");
+    if (treatmentTypes.length > 0) addField("Treatment Types", treatmentTypes.join(", "));
+    if (preCertData?.suicidalIdeation) addField("SI", preCertData.suicidalIdeation);
+    if (preCertData?.homicidalIdeation) addField("HI", preCertData.homicidalIdeation);
     
     // ============ SECTION 5: SUBSTANCE USE HISTORY ============
     addSectionHeader("Substance Use History");
     
     if (preCertData?.substanceHistory && Array.isArray(preCertData.substanceHistory) && preCertData.substanceHistory.length > 0) {
       const substances = preCertData.substanceHistory.filter((s: any) => s.substance);
-      
       if (substances.length > 0) {
-        // Simple table with fixed column widths that fit page
-        const colWidths = [85, 55, 65, 55, 50, 65, 100];
-        const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+        // COMPACT: Narrower columns for tighter table
+        const colWidths = [70, 45, 55, 45, 40, 55, 80];
         const startX = margins.left;
-        
-        checkPageBreak(40 + substances.length * 18);
-        
-        // Table header
-        doc.font("Helvetica-Bold").fontSize(9);
+        checkPageBreak(25 + substances.length * 12);
+        doc.font("Helvetica-Bold").fontSize(7);
         let xPos = startX;
-        const headers = ["Substance", "First Use", "Frequency", "Amount", "Route", "Last Use", "Notes"];
+        const headers = ["Substance", "First", "Freq", "Amt", "Route", "Last", "Notes"];
         const headerY = doc.y;
-        
         headers.forEach((header, i) => {
           doc.text(sanitizeText(header), xPos, headerY, { width: colWidths[i] - 2 });
           xPos += colWidths[i];
         });
-        
-        doc.moveDown(0.4);
-        doc.font("Helvetica").fontSize(9);
-        
-        // Table rows
+        doc.moveDown(0.2);
+        doc.font("Helvetica").fontSize(7);
         substances.forEach((sub: any) => {
-          checkPageBreak(18);
+          checkPageBreak(12);
           const rowY = doc.y;
           xPos = startX;
-          const rowData = [
-            formatValue(sub.substance),
-            formatValue(sub.firstUsed),
-            formatValue(sub.frequency),
-            formatValue(sub.amount),
-            formatValue(sub.route),
-            formatValue(sub.lastUsed),
-            formatValue(sub.method || sub.notes || "")
-          ];
-          
-          rowData.forEach((cell, i) => {
+          [formatValue(sub.substance), formatValue(sub.firstUsed), formatValue(sub.frequency), formatValue(sub.amount), formatValue(sub.route), formatValue(sub.lastUsed), formatValue(sub.method || sub.notes || "")].forEach((cell, i) => {
             doc.text(cell, xPos, rowY, { width: colWidths[i] - 2 });
             xPos += colWidths[i];
           });
-          doc.moveDown(0.3);
+          doc.moveDown(0.15);
         });
-        // Reset position to left margin after table
         doc.x = margins.left;
-        doc.fontSize(10);
+        doc.fontSize(8);
       } else {
         addText("No substance history recorded.");
       }
     } else if (preScreeningData?.substanceUseHistory) {
       addText(preScreeningData.substanceUseHistory);
-      if (preScreeningData.primarySubstance) {
-        addField("Primary Substance", preScreeningData.primarySubstance);
-      }
-      if (preScreeningData.lastUseDate) {
-        addField("Last Use Date", formatDate(preScreeningData.lastUseDate));
-      }
+      if (preScreeningData.primarySubstance) addField("Primary", preScreeningData.primarySubstance);
+      if (preScreeningData.lastUseDate) addField("Last Use", formatDate(preScreeningData.lastUseDate));
     } else {
       addText("Not provided");
     }
     
     // ============ SECTION 6: WITHDRAWAL RISK ============
     addSectionHeader("Withdrawal Risk and Current Symptoms");
-    
-    // Structured factual data (EMR-compatible)
     if (preCertData?.withdrawalSymptoms && Array.isArray(preCertData.withdrawalSymptoms) && preCertData.withdrawalSymptoms.length > 0) {
-      addField("Symptoms Present", preCertData.withdrawalSymptoms.join(", "));
-    } else {
-      addText("No withdrawal symptoms documented at time of assessment.");
+      addField("Symptoms", preCertData.withdrawalSymptoms.join(", "));
     }
+    if (preCertData?.withdrawalNotes) addField("Notes", preCertData.withdrawalNotes);
+    if (preCertData?.severityOfIllness) addField("Severity", preCertData.severityOfIllness);
     
-    if (preCertData?.withdrawalNotes) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Withdrawal Notes:");
-      addText(preCertData.withdrawalNotes);
-    }
-    
-    if (preCertData?.severityOfIllness) {
-      addField("Severity of Illness", preCertData.severityOfIllness);
-    }
-    
-    // ASAM Dimension 1: Withdrawal Analysis - use AI when available, otherwise static fallback
-    doc.moveDown(0.2);
-    doc.font("Helvetica-Bold").text("ASAM Dimension 1 - Acute Intoxication/Withdrawal:");
+    // ASAM Dimension 1
+    doc.font("Helvetica-Bold").fontSize(8).text("Dimension 1 - Withdrawal:", { continued: false });
     doc.font("Helvetica");
     if (clinicalJustifications?.dimension1Withdrawal) {
       addText(clinicalJustifications.dimension1Withdrawal);
     } else if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
-      addText(`Patient presents with ${preCertData.withdrawalSymptoms.length} withdrawal symptom(s) requiring monitoring and medical supervision during detoxification.`);
+      addText(`Patient presents with ${preCertData.withdrawalSymptoms.length} withdrawal symptom(s) requiring medical supervision.`);
     } else {
-      addText("Based on reported substance use patterns, patient requires structured treatment environment for stabilization and recovery.");
+      addText("Requires structured treatment environment for stabilization.");
     }
     
     // ============ SECTION 7: TREATMENT HISTORY ============
-    addSectionHeader("Treatment History and Failed Lower Level Supports");
-    
-    if (preCertData?.treatmentHistory) {
-      addText(preCertData.treatmentHistory);
-    } else if (preScreeningData?.previousTreatment) {
-      addText(preScreeningData.previousTreatment);
-    } else {
-      addText("No prior formal treatment reported.");
-    }
+    addSectionHeader("Treatment History");
+    addText(preCertData?.treatmentHistory || preScreeningData?.previousTreatment || "No prior formal treatment reported.");
     
     // ============ SECTION 8: MEDICAL AND PSYCHIATRIC HISTORY ============
     addSectionHeader("Medical and Psychiatric History");
+    if (preCertData?.medicalConditions) addField("Medical", preCertData.medicalConditions);
+    if (preCertData?.medications || preScreeningData?.currentMedications) addField("Medications", preCertData?.medications || preScreeningData?.currentMedications);
+    if (preCertData?.allergies || nursingData?.allergies) addField("Allergies", preCertData?.allergies || nursingData?.allergies);
     
-    // Structured factual data (EMR-compatible)
-    if (preCertData?.medicalConditions || nursingData?.allergies) {
-      addField("Medical Conditions", preCertData?.medicalConditions);
-      addField("Current Medications", preCertData?.medications || preScreeningData?.currentMedications);
-      addField("Allergies", preCertData?.allergies || nursingData?.allergies);
-    } else {
-      addText("No significant medical history reported.");
-    }
-    
+    // Nursing vitals - compact inline
     if (nursingData) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Nursing Assessment:");
-      doc.font("Helvetica");
-      if (nursingData.bloodPressure) addField("Blood Pressure", nursingData.bloodPressure);
-      if (nursingData.pulse) addField("Pulse", nursingData.pulse);
-      if (nursingData.temperature) addField("Temperature", nursingData.temperature);
-      if (nursingData.weight) addField("Weight", nursingData.weight);
-      if (nursingData.painLevel) addField("Pain Level", nursingData.painLevel);
-      if (nursingData.suicideRiskLevel) addField("Suicide Risk Level", nursingData.suicideRiskLevel);
-      if (nursingData.suicideRiskNotes) {
-        addField("Suicide Risk Notes", nursingData.suicideRiskNotes);
-      }
+      const vitals = [];
+      if (nursingData.bloodPressure) vitals.push(`BP: ${nursingData.bloodPressure}`);
+      if (nursingData.pulse) vitals.push(`P: ${nursingData.pulse}`);
+      if (nursingData.temperature) vitals.push(`T: ${nursingData.temperature}`);
+      if (nursingData.weight) vitals.push(`Wt: ${nursingData.weight}`);
+      if (vitals.length > 0) addField("Vitals", vitals.join(", "));
+      if (nursingData.suicideRiskLevel) addField("Suicide Risk", nursingData.suicideRiskLevel);
     }
     
-    doc.moveDown(0.2);
-    doc.font("Helvetica-Bold").text("Psychiatric History:");
-    doc.font("Helvetica");
-    addField("Mental Health History", preCertData?.mentalHealthHistory || preScreeningData?.mentalHealthDiagnoses);
-    addField("Psychiatric Hospitalizations", preScreeningData?.psychiatricHospitalizations);
-    addField("Suicidal Ideation", preCertData?.suicidalIdeation);
-    addField("Homicidal Ideation", preCertData?.homicidalIdeation);
+    // Psychiatric - inline
+    if (preCertData?.mentalHealthHistory || preScreeningData?.mentalHealthDiagnoses) addField("MH Hx", preCertData?.mentalHealthHistory || preScreeningData?.mentalHealthDiagnoses);
+    if (preScreeningData?.psychiatricHospitalizations) addField("Psych Hosp", preScreeningData.psychiatricHospitalizations);
     
-    // ASAM Dimensions 2 & 3: Biomedical and Psychiatric (supplemental)
+    // ASAM Dimensions 2 & 3
     if (clinicalJustifications?.dimension2Biomedical) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("ASAM Dimension 2 - Biomedical Conditions:");
-      doc.font("Helvetica");
+      doc.font("Helvetica-Bold").fontSize(8).text("Dimension 2 - Biomedical:");
       addText(clinicalJustifications.dimension2Biomedical);
     }
-    
     if (clinicalJustifications?.dimension3Psychiatric) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("ASAM Dimension 3 - Psychiatric/Cognitive Conditions:");
-      doc.font("Helvetica");
+      doc.font("Helvetica-Bold").fontSize(8).text("Dimension 3 - Psychiatric:");
       addText(clinicalJustifications.dimension3Psychiatric);
     }
     
     // ============ SECTION 9: PSYCHOSOCIAL ============
-    addSectionHeader("Psychosocial and Functional Impairment");
+    addSectionHeader("Psychosocial Factors");
+    if (preCertData?.psychosocialNotes) addText(preCertData.psychosocialNotes);
+    if (preScreeningData?.employmentStatus) addField("Employment", preScreeningData.employmentStatus);
+    if (preScreeningData?.livingArrangements) addField("Living", preScreeningData.livingArrangements);
+    if (preScreeningData?.motivationLevel) addField("Motivation", preScreeningData.motivationLevel);
+    if (preScreeningData?.barriers) addField("Barriers", preScreeningData.barriers);
+    if (preCertData?.familyHistory) addField("Family Hx", preCertData.familyHistory);
     
-    // Structured factual data (EMR-compatible)
-    doc.font("Helvetica-Bold").text("Documented Psychosocial Factors:");
-    doc.font("Helvetica");
-    addText(preCertData?.psychosocialNotes || "Not provided");
-    
-    if (preScreeningData?.employmentStatus) {
-      addField("Employment Status", preScreeningData.employmentStatus);
-    }
-    if (preScreeningData?.livingArrangements) {
-      addField("Living Arrangements", preScreeningData.livingArrangements);
-    }
-    if (preScreeningData?.motivationLevel) {
-      addField("Motivation Level", preScreeningData.motivationLevel);
-    }
-    if (preScreeningData?.barriers) {
-      addField("Barriers to Treatment", preScreeningData.barriers);
-    }
-    
-    // ASAM Dimension 4: Readiness to Change
+    // ASAM Dimensions 4, 5, 6 (critical for extended stay)
     if (clinicalJustifications?.dimension4Readiness) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("ASAM Dimension 4 - Readiness to Change:");
-      doc.font("Helvetica");
+      doc.font("Helvetica-Bold").fontSize(8).text("Dimension 4 - Readiness:");
       addText(clinicalJustifications.dimension4Readiness);
     }
-    
-    // ASAM Dimension 5: Relapse Potential (CRITICAL for extended stay justification)
     if (clinicalJustifications?.dimension5RelapsePotential) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("ASAM Dimension 5 - Relapse/Continued Use Potential:");
-      doc.font("Helvetica");
+      doc.font("Helvetica-Bold").fontSize(8).text("Dimension 5 - Relapse Potential:");
       addText(clinicalJustifications.dimension5RelapsePotential);
     }
-    
-    // ASAM Dimension 6: Recovery Environment
     if (clinicalJustifications?.dimension6Environment) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("ASAM Dimension 6 - Recovery Environment:");
-      doc.font("Helvetica");
+      doc.font("Helvetica-Bold").fontSize(8).text("Dimension 6 - Environment:");
       addText(clinicalJustifications.dimension6Environment);
     }
     
-    // Family History (structured with fallback)
-    doc.moveDown(0.2);
-    doc.font("Helvetica-Bold").text("Family History:");
-    doc.font("Helvetica");
-    if (preCertData?.familyHistory) {
-      addText(preCertData.familyHistory);
-      // AI-enhanced family history analysis (supplemental)
-      if (clinicalJustifications?.familyHistoryAnalysis) {
-        doc.moveDown(0.1);
-        addText(clinicalJustifications.familyHistoryAnalysis);
-      }
-    } else {
-      addText("Family history assessment to be completed during intake process.");
-    }
-    
     // ============ SECTION 10: LEGAL STATUS ============
-    addSectionHeader("Legal and External Stressors");
-    
+    addSectionHeader("Legal Status");
     const legalStatus = [];
-    if (preScreeningData?.hasLegalIssues === "yes") legalStatus.push("Has legal issues");
-    if (preScreeningData?.hasPendingCharges === "yes") legalStatus.push("Has pending charges");
-    if (preScreeningData?.isProbationParole === "yes") legalStatus.push("On probation/parole");
-    if (preScreeningData?.hasRegisteredOffenses === "yes") legalStatus.push("Has registered offenses");
-    
+    if (preScreeningData?.hasLegalIssues === "yes") legalStatus.push("Legal issues");
+    if (preScreeningData?.hasPendingCharges === "yes") legalStatus.push("Pending charges");
+    if (preScreeningData?.isProbationParole === "yes") legalStatus.push("Probation/parole");
     if (legalStatus.length > 0) {
-      addText(legalStatus.join(", "));
+      addField("Status", legalStatus.join(", "));
     } else if (preCertData?.legalIssues) {
-      addText(preCertData.legalIssues);
+      addField("Status", preCertData.legalIssues);
     } else {
       addText("No legal issues reported.");
     }
-    
-    if (preScreeningData?.legalDetails) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Legal Details:");
-      addText(preScreeningData.legalDetails);
-    }
+    if (preScreeningData?.legalDetails) addField("Details", preScreeningData.legalDetails);
     
     // ============ SECTION 11: LEVEL OF CARE RECOMMENDATION ============
-    addSectionHeader("Level of Care Recommendation and Medical Necessity");
-    
+    addSectionHeader("Level of Care and Medical Necessity");
     const levelOfCare = sanitizeText(inquiry.levelOfCare || preScreeningData?.programRecommendation || "Residential");
-    addField("Recommended Level of Care", levelOfCare);
+    addField("LOC", levelOfCare);
+    if (clinicalJustifications?.recommendedDays) addField("LOS", `${clinicalJustifications.recommendedDays} days`);
     
-    if (clinicalJustifications?.recommendedDays) {
-      addField("Recommended Length of Stay", `${clinicalJustifications.recommendedDays} days`);
-    }
-    
-    if (preScreeningData?.levelOfCareInterest && Array.isArray(preScreeningData.levelOfCareInterest)) {
-      addField("Level of Care Interest", preScreeningData.levelOfCareInterest);
-    }
-    
-    // Level of Care Justification
-    doc.moveDown(0.3);
-    doc.font("Helvetica-Bold").text("Level of Care Justification:");
-    doc.font("Helvetica");
+    // Level of Care Justification - compact
     if (clinicalJustifications?.levelOfCareJustification) {
+      doc.font("Helvetica-Bold").fontSize(8).text("LOC Justification:");
       addText(clinicalJustifications.levelOfCareJustification);
-    } else {
-      addText(`Based on clinical assessment, ${levelOfCare} level of care is indicated due to patient's substance use severity, inability to maintain sobriety in less restrictive settings, and need for 24-hour structured programming with medical supervision.`);
     }
     
-    // Medical Necessity Summary (AI-enhanced)
-    doc.moveDown(0.3);
-    doc.font("Helvetica-Bold").text("Medical Necessity Justification (ASAM Criteria):");
-    doc.font("Helvetica");
-    
+    // Medical Necessity Summary
+    doc.font("Helvetica-Bold").fontSize(8).text("Medical Necessity (ASAM):");
     if (clinicalJustifications?.medicalNecessitySummary) {
       addText(clinicalJustifications.medicalNecessitySummary);
     } else {
-      // Fallback to built-in justification
-      const necessityPoints = [];
-      if (preCertData?.severityOfIllness) {
-        necessityPoints.push(`Dimension 1 (Acute Intoxication/Withdrawal): Severity rated as ${sanitizeText(preCertData.severityOfIllness)}`);
-      }
-      if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
-        necessityPoints.push("documented withdrawal symptoms requiring medical monitoring");
-      }
-      if (preCertData?.medicalConditions) {
-        necessityPoints.push("Dimension 2 (Biomedical Conditions): Active medical conditions complicating treatment");
-      }
-      if (preCertData?.mentalHealthHistory || preScreeningData?.mentalHealthDiagnoses) {
-        necessityPoints.push("Dimension 3 (Emotional/Behavioral): Co-occurring psychiatric conditions");
-      }
-      if (preCertData?.psychosocialNotes || preScreeningData?.barriers) {
-        necessityPoints.push("Dimension 6 (Recovery Environment): Psychosocial instability and limited recovery support");
-      }
-      if (preScreeningData?.previousTreatment || preCertData?.treatmentHistory) {
-        necessityPoints.push("Dimension 4 (Treatment Acceptance): Prior treatment attempts at lower levels of care have been unsuccessful");
-      }
-      
-      if (necessityPoints.length > 0) {
-        addText(`Patient meets medical necessity criteria for ${levelOfCare} level of care based on multidimensional assessment:`);
-        necessityPoints.forEach(point => {
-          checkPageBreak(15);
-          doc.text(`  - ${point}`, { indent: 10, width: pageWidth - 20 });
-        });
-        doc.moveDown(0.2);
-        addText(`Patient has demonstrated inability to sustain recovery in less restrictive settings. 24-hour structured programming is required to ensure safety, stability, and engagement in intensive therapeutic interventions.`);
-      } else {
-        addText(`Patient is recommended for ${levelOfCare} level of care based on clinical presentation. Medical necessity is established through documented substance use disorder severity and need for structured treatment environment.`);
-      }
+      addText(`Patient meets criteria for ${levelOfCare} based on SUD severity, failed lower level supports, and need for 24-hour structured programming.`);
     }
-    
-    if (preScreeningData?.recommendationNotes) {
-      doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Clinical Recommendation Notes:");
-      addText(preScreeningData.recommendationNotes);
-    }
+    if (preScreeningData?.recommendationNotes) addField("Notes", preScreeningData.recommendationNotes);
     
     // ============ SECTION 12: INITIAL TREATMENT FOCUS ============
-    addSectionHeader("Initial Treatment Focus");
+    addSectionHeader("Treatment Focus");
+    doc.fontSize(8);
+    const treatmentItems = ["24-hour residential", "Medical monitoring/withdrawal mgmt", "Psychiatric eval/medication mgmt", "Individual/group therapy", "Relapse prevention", "Family involvement", "Discharge planning"];
+    addText(treatmentItems.join(" | "));
     
-    checkPageBreak(120); // Ensure treatment list stays together
-    doc.fontSize(10);
-    const treatmentItems = [
-      "24-hour structured residential programming",
-      "Medical monitoring and withdrawal management as clinically indicated",
-      "Psychiatric evaluation and medication management if indicated",
-      "Individual and group therapy sessions",
-      "Relapse prevention planning and coping skills development",
-      "Family involvement and psychoeducation",
-      "Discharge planning and continuing care coordination"
-    ];
-    treatmentItems.forEach(item => {
-      checkPageBreak(15);
-      doc.text(`  - ${item}`, { indent: 10 });
-    });
-    
-    // ============ SECTION 13: SIGN OFF BLOCK ============
-    checkPageBreak(100); // Keep signature block together
-    doc.moveDown(0.8);
-    doc.moveTo(margins.left, doc.y).lineTo(margins.left + pageWidth, doc.y).stroke();
-    doc.moveDown(0.4);
-    
-    doc.font("Helvetica-Bold").fontSize(10);
-    doc.text("Prepared by: _______________________________________");
+    // ============ SECTION 13: SIGN OFF BLOCK - COMPACT ============
+    checkPageBreak(50);
     doc.moveDown(0.3);
-    doc.text("Title: _____________________________________________");
-    doc.moveDown(0.3);
-    doc.text("Date: _____________________________________________");
-    doc.moveDown(0.4);
-    
-    doc.font("Helvetica").fontSize(9);
+    doc.font("Helvetica-Bold").fontSize(8);
+    doc.text("Prepared by: _________________________ Title: _________________________ Date: _____________");
+    doc.moveDown(0.15);
+    doc.font("Helvetica").fontSize(7);
     doc.text("[ ] Information reviewed with patient");
     
     // Add footer to the last page
