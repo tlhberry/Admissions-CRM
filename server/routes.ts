@@ -2762,11 +2762,11 @@ async function generateAdmissionsReportPdf(
     if (preCertData?.substanceHistory && Array.isArray(preCertData.substanceHistory) && preCertData.substanceHistory.length > 0) {
       const substances = preCertData.substanceHistory.filter((s: any) => s.substance);
       if (substances.length > 0) {
-        // Widened Amount column (index 3) for longer text like "6 drinks and two shots"
-        const colWidths = [65, 40, 50, 100, 35, 50, 70];
+        // Widened Amount column significantly for long text
+        const colWidths = [55, 35, 45, 140, 30, 45, 60];
         const startX = margins.left;
-        checkPageBreak(25 + substances.length * 12);
-        doc.font("Helvetica-Bold").fontSize(7);
+        checkPageBreak(25 + substances.length * 14);
+        doc.font("Helvetica-Bold").fontSize(8);
         let xPos = startX;
         const headers = ["Substance", "First", "Freq", "Amount", "Route", "Last", "Notes"];
         const headerY = doc.y;
@@ -2774,17 +2774,17 @@ async function generateAdmissionsReportPdf(
           doc.text(sanitizeText(header), xPos, headerY, { width: colWidths[i] - 2 });
           xPos += colWidths[i];
         });
-        doc.moveDown(0.2);
-        doc.font("Helvetica").fontSize(7);
+        doc.moveDown(0.25);
+        doc.font("Helvetica").fontSize(8);
         substances.forEach((sub: any) => {
-          checkPageBreak(12);
+          checkPageBreak(14);
           const rowY = doc.y;
           xPos = startX;
           [formatValue(sub.substance), formatValue(sub.firstUsed), formatValue(sub.frequency), formatValue(sub.amount), formatValue(sub.route), formatValue(sub.lastUsed), formatValue(sub.method || sub.notes || "")].forEach((cell, i) => {
             doc.text(cell, xPos, rowY, { width: colWidths[i] - 2 });
             xPos += colWidths[i];
           });
-          doc.moveDown(0.15);
+          doc.moveDown(0.2);
         });
         doc.x = margins.left;
         doc.fontSize(8);
