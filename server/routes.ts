@@ -210,30 +210,71 @@ async function generateClinicalJustifications(
       levelOfCare: inquiry.levelOfCare || preScreeningData?.programRecommendation,
     };
 
-    const prompt = `You are a clinical documentation specialist for addiction treatment utilization review. Based on the following patient data, generate detailed clinical justifications using evidence-based medical terminology. DO NOT fabricate symptoms or conditions not supported by the data - only elaborate on what is documented.
+    const prompt = `You are a clinical documentation specialist for addiction treatment utilization review. Your task is to EXPAND and ELABORATE on patient data using evidence-based clinical terminology. Generate detailed, comprehensive clinical narratives that maximize medical necessity documentation for insurance review.
+
+CRITICAL RULES:
+1. NEVER fabricate symptoms, conditions, or facts not present in the data
+2. ALWAYS elaborate and expand on documented data with clinical terminology
+3. Use specific medical terminology to describe symptoms (e.g., "tremors" becomes "fine motor tremors consistent with autonomic hyperactivity", "anxiety" becomes "generalized anxiety with anticipatory features and physiological arousal")
+4. Connect symptoms to clinical significance and treatment necessity
+5. Every output field should be LONGER and MORE DETAILED than the raw input data
 
 PATIENT DATA:
 ${JSON.stringify(clinicalSummary, null, 2)}
 
-Generate a JSON response with these fields. Use clinical terminology appropriate for insurance utilization review. Justify medical necessity for residential/detox treatment to maximize reimbursable days. Base all statements ONLY on the provided data - do not invent symptoms:
+Generate a JSON response. Each field must contain detailed clinical narratives using utilization review terminology:
 
 {
-  "withdrawalRiskAnalysis": "2-3 sentences describing withdrawal risks based on substances used, last use dates, and documented symptoms. Use clinical terms like 'physiological dependence', 'delirium tremens risk', 'autonomic instability', 'seizure threshold' where applicable. If withdrawal symptoms documented, describe their severity and impact on functioning.",
+  "withdrawalRiskAnalysis": "4-6 sentences MINIMUM. For each documented withdrawal symptom, provide clinical elaboration:
+    - Tremors → 'fine motor tremors indicative of CNS hyperexcitability and early withdrawal syndrome, requiring medical monitoring for progression to more severe manifestations'
+    - Anxiety → 'acute anxiety with physiological symptoms including tachycardia and diaphoresis, consistent with autonomic dysregulation during withdrawal'
+    - Sweating/diaphoresis → 'profuse diaphoresis reflecting sympathetic nervous system overactivation, a hallmark of acute withdrawal requiring fluid management'
+    - Nausea/vomiting → 'gastrointestinal disturbance with nausea and emesis, contributing to electrolyte imbalance risk and dehydration'
+    - Insomnia → 'severe sleep architecture disruption with rebound insomnia, impairing recovery capacity'
+    Reference last use date to establish withdrawal timeline. Use terms: 'physiological dependence', 'kindling phenomenon', 'delirium tremens risk', 'autonomic instability', 'seizure threshold lowering'. Explain why 24-hour monitoring is medically necessary.",
   
-  "coOccurringConditionsAnalysis": "2-3 sentences describing any co-occurring medical or psychiatric conditions. Reference specific conditions mentioned (e.g., 'Patient presents with comorbid anxiety disorder with panic features', 'respiratory comorbidity including asthma'). Note how these complicate treatment and require higher level of care.",
+  "coOccurringConditionsAnalysis": "4-6 sentences MINIMUM. For each documented condition, provide clinical context:
+    - Panic attacks → 'comorbid panic disorder with recurrent panic attacks characterized by acute sympathetic surge, chest tightness, and catastrophic cognitions, complicating withdrawal management and requiring psychiatric stabilization'
+    - Asthma → 'respiratory comorbidity including bronchial asthma requiring maintenance therapy, with stress-exacerbated bronchospasm risk during treatment'
+    - Depression → 'major depressive disorder with neurovegetative features including anhedonia and psychomotor changes, requiring integrated dual-diagnosis treatment'
+    - Any medical condition → elaborate on how it complicates SUD treatment and necessitates higher level of care with medical oversight",
   
-  "psychosocialImpairmentAnalysis": "2-3 sentences describing psychosocial factors that impair recovery. Include employment status, legal issues, housing instability, family dysfunction. Use language like 'functionally impaired', 'compromised social support system', 'external stressors elevate relapse risk'.",
+  "psychosocialImpairmentAnalysis": "4-6 sentences MINIMUM. Expand on EVERY documented psychosocial factor:
+    - Unemployment → 'patient is currently unemployed, resulting in financial instability, loss of structured daily activities, and removal of prosocial occupational identity, all of which elevate relapse risk'
+    - Legal charges → 'pending legal matters including [specific charges if documented] create significant external stressors and court-mandated treatment requirements, while legal consequences serve as motivation for engagement'
+    - Car accident/trauma → 'history of motor vehicle accident contributing to trauma symptomatology and potential chronic pain, which commonly co-occurs with substance use as maladaptive coping'
+    - Housing instability → 'unstable living arrangements preclude safe recovery environment and eliminate possibility of outpatient treatment success'
+    - Family conflict → 'dysfunctional family dynamics with expressed criticism and enabling behaviors compromise natural support system'
+    Use terms: 'functionally impaired in multiple life domains', 'psychosocial destabilization', 'inadequate recovery capital', 'external stressors incompatible with lower level care'",
   
-  "familyHistoryAnalysis": "1-2 sentences on family history of substance use or mental health if documented. Reference genetic predisposition and intergenerational patterns where applicable.",
+  "familyHistoryAnalysis": "3-4 sentences. If family history documented:
+    - 'Patient reports family history of [specific substances/conditions], indicating genetic predisposition and intergenerational transmission of addictive disorders'
+    - 'Familial patterns suggest epigenetic vulnerability and learned maladaptive coping mechanisms'
+    - 'This genetic loading increases patient's risk for treatment-resistant course and necessitates intensive intervention'
+    If no family history documented, note: 'Family history assessment pending; however, presenting severity suggests constitutional vulnerability to substance use disorder'",
   
-  "medicalNecessitySummary": "3-4 sentences providing comprehensive medical necessity justification. Cite ASAM criteria dimensions where applicable. Reference failed lower level interventions, inability to maintain sobriety in less restrictive settings, need for 24-hour monitoring and structured programming.",
+  "medicalNecessitySummary": "6-8 sentences MINIMUM. Comprehensive ASAM-based justification:
+    - Cite specific ASAM Criteria dimensions affected
+    - Reference inability to maintain sobriety in less restrictive settings (prior treatment failures, outpatient inadequacy)
+    - Emphasize need for 24-hour structured programming with medical monitoring
+    - Note safety concerns requiring supervised environment
+    - Reference specific symptoms/conditions from patient data that justify residential level
+    - State medical necessity for length of stay based on severity
+    - Conclude with statement that patient meets criteria for residential/detox level per ASAM",
   
-  "recommendedDays": "Number between 14-30 based on severity. 14-21 for moderate cases, 21-28 for severe polysubstance or significant psychiatric comorbidity, 28-30 for complex presentations with medical complications or high suicide risk.",
+  "recommendedDays": "Integer 21-30. Base on severity:
+    - 21 for moderate presentations
+    - 25-28 for polysubstance dependence, psychiatric comorbidity, or significant psychosocial barriers
+    - 28-30 for high medical complexity, suicide risk, or severe trauma history",
   
-  "levelOfCareJustification": "2-3 sentences justifying the specific level of care. If detox indicated, explain medical monitoring needs. For residential, explain why outpatient would be insufficient given presentation severity and psychosocial barriers."
+  "levelOfCareJustification": "4-5 sentences. Explicitly state why lower levels of care are contraindicated:
+    - 'Outpatient treatment is contraindicated given [specific factors from data]'
+    - 'Patient requires 24-hour nursing availability for withdrawal monitoring and medication management'
+    - 'Structured residential programming necessary to establish initial abstinence, develop coping skills, and address co-occurring conditions in integrated setting'
+    - 'Home environment lacks structure and support necessary for early recovery stability'"
 }
 
-Important: If data is sparse for a section, acknowledge limited documentation but still provide clinically appropriate language for what IS documented. Never fabricate conditions or symptoms.`;
+OUTPUT REQUIREMENT: Each field must be substantially longer and more clinically detailed than the raw input data. Transform brief patient data into comprehensive clinical documentation suitable for insurance authorization.`;
 
     const response = await grok.chat.completions.create({
       model: "grok-2-1212",
@@ -253,26 +294,29 @@ Important: If data is sparse for a section, acknowledge limited documentation bu
 
     const rawJustifications = JSON.parse(content);
     
-    // Validate and sanitize the response - reject empty/whitespace strings
-    const validateString = (val: any): string => {
-      if (typeof val !== 'string') return '';
+    // Validate and sanitize the response - reject empty/short strings
+    const validateString = (val: any, fieldName: string): string => {
+      if (typeof val !== 'string') {
+        console.log(`AI output discarded - not a string for ${fieldName}`);
+        return '';
+      }
       const trimmed = val.trim();
-      if (trimmed.length < 10) {
-        console.log(`AI output discarded - too short: "${trimmed}"`);
+      if (trimmed.length < 50) {
+        console.log(`AI output discarded - too short (${trimmed.length} chars) for ${fieldName}: "${trimmed.substring(0, 100)}..."`);
         return '';
       }
       return trimmed;
     };
     
     const justifications: ClinicalJustificationData = {
-      withdrawalRiskAnalysis: validateString(rawJustifications.withdrawalRiskAnalysis),
-      coOccurringConditionsAnalysis: validateString(rawJustifications.coOccurringConditionsAnalysis),
-      psychosocialImpairmentAnalysis: validateString(rawJustifications.psychosocialImpairmentAnalysis),
-      familyHistoryAnalysis: validateString(rawJustifications.familyHistoryAnalysis),
-      medicalNecessitySummary: validateString(rawJustifications.medicalNecessitySummary),
+      withdrawalRiskAnalysis: validateString(rawJustifications.withdrawalRiskAnalysis, 'withdrawalRiskAnalysis'),
+      coOccurringConditionsAnalysis: validateString(rawJustifications.coOccurringConditionsAnalysis, 'coOccurringConditionsAnalysis'),
+      psychosocialImpairmentAnalysis: validateString(rawJustifications.psychosocialImpairmentAnalysis, 'psychosocialImpairmentAnalysis'),
+      familyHistoryAnalysis: validateString(rawJustifications.familyHistoryAnalysis, 'familyHistoryAnalysis'),
+      medicalNecessitySummary: validateString(rawJustifications.medicalNecessitySummary, 'medicalNecessitySummary'),
       recommendedDays: typeof rawJustifications.recommendedDays === 'number' && rawJustifications.recommendedDays >= 7 && rawJustifications.recommendedDays <= 45
-        ? rawJustifications.recommendedDays : 21,
-      levelOfCareJustification: validateString(rawJustifications.levelOfCareJustification),
+        ? rawJustifications.recommendedDays : 25,
+      levelOfCareJustification: validateString(rawJustifications.levelOfCareJustification, 'levelOfCareJustification'),
     };
     
     // Track AI usage
