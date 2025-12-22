@@ -53,6 +53,14 @@ export default function AdminSettings() {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [aiBudgetLimit, setAiBudgetLimit] = useState("");
   const [aiSettingsInitialized, setAiSettingsInitialized] = useState(false);
+  
+  // Add User form state
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserFirstName, setNewUserFirstName] = useState("");
+  const [newUserLastName, setNewUserLastName] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<UserRole>("admissions");
 
   if (company && !companyNameInitialized) {
     setCompanyName(company.name);
@@ -148,6 +156,51 @@ export default function AdminSettings() {
       });
     },
   });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { email: string; password: string; firstName: string; lastName: string; role: UserRole }) => {
+      const response = await apiRequest("POST", "/api/auth/register", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "User Created",
+        description: "New team member has been added. They will need to change their password on first login.",
+      });
+      setShowAddUser(false);
+      setNewUserEmail("");
+      setNewUserFirstName("");
+      setNewUserLastName("");
+      setNewUserPassword("");
+      setNewUserRole("admissions");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateUser = () => {
+    if (!newUserEmail || !newUserPassword || !newUserFirstName || !newUserLastName) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    createUserMutation.mutate({
+      email: newUserEmail,
+      password: newUserPassword,
+      firstName: newUserFirstName,
+      lastName: newUserLastName,
+      role: newUserRole,
+    });
+  };
 
   const handleSaveCompany = () => {
     updateCompanyMutation.mutate({ name: companyName });
@@ -314,13 +367,112 @@ export default function AdminSettings() {
 
           <TabsContent value="users">
             <Card>
-              <CardHeader>
-                <CardTitle>Team Members</CardTitle>
-                <CardDescription>
-                  Manage user roles and access for your team
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle>Team Members</CardTitle>
+                  <CardDescription>
+                    Manage user roles and access for your team
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setShowAddUser(!showAddUser)}
+                  data-testid="button-add-user"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add User
+                </Button>
               </CardHeader>
               <CardContent>
+                {showAddUser && (
+                  <div className="p-4 mb-4 border rounded-md space-y-4 bg-muted/50">
+                    <div className="font-medium">Add New Team Member</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-user-first-name">First Name</Label>
+                        <Input
+                          id="new-user-first-name"
+                          value={newUserFirstName}
+                          onChange={(e) => setNewUserFirstName(e.target.value)}
+                          placeholder="First name"
+                          data-testid="input-new-user-first-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-user-last-name">Last Name</Label>
+                        <Input
+                          id="new-user-last-name"
+                          value={newUserLastName}
+                          onChange={(e) => setNewUserLastName(e.target.value)}
+                          placeholder="Last name"
+                          data-testid="input-new-user-last-name"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-email">Email</Label>
+                      <Input
+                        id="new-user-email"
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        data-testid="input-new-user-email"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-password">Temporary Password</Label>
+                      <Input
+                        id="new-user-password"
+                        type="password"
+                        value={newUserPassword}
+                        onChange={(e) => setNewUserPassword(e.target.value)}
+                        placeholder="Must be 12+ characters with uppercase, lowercase, number, and symbol"
+                        data-testid="input-new-user-password"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        User will be required to change this on first login
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-role">Role</Label>
+                      <Select
+                        value={newUserRole}
+                        onValueChange={(value) => setNewUserRole(value as UserRole)}
+                      >
+                        <SelectTrigger data-testid="select-new-user-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="admissions">Admissions</SelectItem>
+                          <SelectItem value="clinical">Clinical</SelectItem>
+                          <SelectItem value="read_only">Read Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleCreateUser}
+                        disabled={createUserMutation.isPending}
+                        data-testid="button-create-user"
+                      >
+                        {createUserMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-2" />
+                        )}
+                        Create User
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAddUser(false)}
+                        data-testid="button-cancel-add-user"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {usersLoading ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
