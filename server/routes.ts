@@ -120,11 +120,21 @@ const AI_TRANSCRIPTION_COST_CENTS = 50; // ~$0.50 per transcription
 // Cost for clinical justification generation
 const AI_CLINICAL_JUSTIFICATION_COST_CENTS = 15; // ~$0.15 per report
 
-// Interface for clinical justification data
+// Interface for clinical justification data with all 6 ASAM dimensions
 interface ClinicalJustificationData {
-  withdrawalRiskAnalysis: string;
-  coOccurringConditionsAnalysis: string;
-  psychosocialImpairmentAnalysis: string;
+  // Dimension 1: Acute Intoxication/Withdrawal
+  dimension1Withdrawal: string;
+  // Dimension 2: Biomedical Conditions
+  dimension2Biomedical: string;
+  // Dimension 3: Emotional/Behavioral/Cognitive
+  dimension3Psychiatric: string;
+  // Dimension 4: Readiness to Change
+  dimension4Readiness: string;
+  // Dimension 5: Relapse/Continued Use Potential
+  dimension5RelapsePotential: string;
+  // Dimension 6: Recovery Environment
+  dimension6Environment: string;
+  // Overall summaries
   familyHistoryAnalysis: string;
   medicalNecessitySummary: string;
   recommendedDays: number;
@@ -210,71 +220,104 @@ async function generateClinicalJustifications(
       levelOfCare: inquiry.levelOfCare || preScreeningData?.programRecommendation,
     };
 
-    const prompt = `You are a clinical documentation specialist for addiction treatment utilization review. Your task is to EXPAND and ELABORATE on patient data using evidence-based clinical terminology. Generate detailed, comprehensive clinical narratives that maximize medical necessity documentation for insurance review.
+    const prompt = `You are a clinical documentation specialist for addiction treatment utilization review. Your task is to EXPAND and ELABORATE on patient data using ALL 6 ASAM CRITERIA DIMENSIONS with evidence-based clinical terminology. Generate detailed, comprehensive clinical narratives that maximize medical necessity documentation for insurance review and justify extended residential/detox treatment.
 
 CRITICAL RULES:
 1. NEVER fabricate symptoms, conditions, or facts not present in the data
 2. ALWAYS elaborate and expand on documented data with clinical terminology
-3. Use specific medical terminology to describe symptoms (e.g., "tremors" becomes "fine motor tremors consistent with autonomic hyperactivity", "anxiety" becomes "generalized anxiety with anticipatory features and physiological arousal")
-4. Connect symptoms to clinical significance and treatment necessity
+3. Use specific medical terminology to describe symptoms
+4. Connect ALL documented factors to clinical significance and treatment necessity
 5. Every output field should be LONGER and MORE DETAILED than the raw input data
+6. Address ALL 6 ASAM dimensions comprehensively
 
 PATIENT DATA:
 ${JSON.stringify(clinicalSummary, null, 2)}
 
-Generate a JSON response. Each field must contain detailed clinical narratives using utilization review terminology:
+Generate a JSON response with ALL 6 ASAM DIMENSIONS plus summaries. Each field must contain detailed clinical narratives:
 
 {
-  "withdrawalRiskAnalysis": "4-6 sentences MINIMUM. For each documented withdrawal symptom, provide clinical elaboration:
-    - Tremors → 'fine motor tremors indicative of CNS hyperexcitability and early withdrawal syndrome, requiring medical monitoring for progression to more severe manifestations'
-    - Anxiety → 'acute anxiety with physiological symptoms including tachycardia and diaphoresis, consistent with autonomic dysregulation during withdrawal'
-    - Sweating/diaphoresis → 'profuse diaphoresis reflecting sympathetic nervous system overactivation, a hallmark of acute withdrawal requiring fluid management'
-    - Nausea/vomiting → 'gastrointestinal disturbance with nausea and emesis, contributing to electrolyte imbalance risk and dehydration'
-    - Insomnia → 'severe sleep architecture disruption with rebound insomnia, impairing recovery capacity'
-    Reference last use date to establish withdrawal timeline. Use terms: 'physiological dependence', 'kindling phenomenon', 'delirium tremens risk', 'autonomic instability', 'seizure threshold lowering'. Explain why 24-hour monitoring is medically necessary.",
+  "dimension1Withdrawal": "ASAM DIMENSION 1: ACUTE INTOXICATION AND/OR WITHDRAWAL POTENTIAL (5-7 sentences MINIMUM)
+    For each documented withdrawal symptom, provide clinical elaboration:
+    - Tremors → 'fine motor tremors indicative of CNS hyperexcitability and early withdrawal syndrome, with risk of progression to generalized tremors and delirium tremens without medical monitoring'
+    - Anxiety → 'acute anxiety with physiological manifestations including tachycardia, diaphoresis, and hypervigilance, consistent with autonomic nervous system dysregulation during active withdrawal'
+    - Sweating/diaphoresis → 'profuse diaphoresis reflecting sympathetic nervous system overactivation, a hallmark of acute withdrawal syndrome requiring fluid and electrolyte management'
+    - Nausea/vomiting → 'gastrointestinal disturbance with nausea and emesis, creating risk of electrolyte imbalance, dehydration, and aspiration requiring nursing monitoring'
+    - Insomnia → 'severe sleep architecture disruption with rebound insomnia, impairing cognitive function and emotional regulation, heightening relapse vulnerability'
+    Reference last use date to establish withdrawal timeline. Use terms: 'physiological dependence', 'kindling phenomenon', 'delirium tremens risk', 'autonomic instability', 'seizure threshold lowering', 'CIWA protocol indicated'. Explain why 24-hour medical monitoring is essential.",
   
-  "coOccurringConditionsAnalysis": "4-6 sentences MINIMUM. For each documented condition, provide clinical context:
-    - Panic attacks → 'comorbid panic disorder with recurrent panic attacks characterized by acute sympathetic surge, chest tightness, and catastrophic cognitions, complicating withdrawal management and requiring psychiatric stabilization'
-    - Asthma → 'respiratory comorbidity including bronchial asthma requiring maintenance therapy, with stress-exacerbated bronchospasm risk during treatment'
-    - Depression → 'major depressive disorder with neurovegetative features including anhedonia and psychomotor changes, requiring integrated dual-diagnosis treatment'
-    - Any medical condition → elaborate on how it complicates SUD treatment and necessitates higher level of care with medical oversight",
+  "dimension2Biomedical": "ASAM DIMENSION 2: BIOMEDICAL CONDITIONS AND COMPLICATIONS (5-7 sentences MINIMUM)
+    For each documented medical condition, provide clinical context:
+    - Asthma → 'respiratory comorbidity including bronchial asthma requiring maintenance therapy with inhaled corticosteroids, with stress-exacerbated bronchospasm risk during withdrawal period'
+    - Hypertension → 'cardiovascular comorbidity with elevated blood pressure requiring monitoring during withdrawal, as autonomic instability may precipitate hypertensive crisis'
+    - Chronic pain → 'chronic pain syndrome complicating treatment as patient may have developed opioid tolerance and cross-tolerance, requiring specialized pain management protocol'
+    - Any condition → elaborate on medication interactions with substances, how condition complicates detox, and necessity for medical supervision
+    Emphasize need for 24-hour nursing and physician availability.",
   
-  "psychosocialImpairmentAnalysis": "4-6 sentences MINIMUM. Expand on EVERY documented psychosocial factor:
-    - Unemployment → 'patient is currently unemployed, resulting in financial instability, loss of structured daily activities, and removal of prosocial occupational identity, all of which elevate relapse risk'
-    - Legal charges → 'pending legal matters including [specific charges if documented] create significant external stressors and court-mandated treatment requirements, while legal consequences serve as motivation for engagement'
-    - Car accident/trauma → 'history of motor vehicle accident contributing to trauma symptomatology and potential chronic pain, which commonly co-occurs with substance use as maladaptive coping'
-    - Housing instability → 'unstable living arrangements preclude safe recovery environment and eliminate possibility of outpatient treatment success'
-    - Family conflict → 'dysfunctional family dynamics with expressed criticism and enabling behaviors compromise natural support system'
-    Use terms: 'functionally impaired in multiple life domains', 'psychosocial destabilization', 'inadequate recovery capital', 'external stressors incompatible with lower level care'",
+  "dimension3Psychiatric": "ASAM DIMENSION 3: EMOTIONAL, BEHAVIORAL, OR COGNITIVE CONDITIONS (5-7 sentences MINIMUM)
+    For each documented psychiatric condition:
+    - Panic attacks → 'comorbid panic disorder with recurrent panic attacks characterized by acute sympathetic surge, chest tightness, dyspnea, and catastrophic cognitions, complicating withdrawal management and requiring psychiatric stabilization with possible benzodiazepine taper coordination'
+    - Depression → 'major depressive disorder with neurovegetative features including anhedonia, psychomotor changes, and possible suicidal ideation requiring safety monitoring in structured setting'
+    - Anxiety → 'generalized anxiety disorder with chronic worry, muscle tension, and sleep disturbance, likely to worsen during acute withdrawal and early recovery'
+    - Trauma/PTSD → 'trauma history with hyperarousal symptoms potentially triggered by treatment environment, requiring trauma-informed care approach'
+    Emphasize dual-diagnosis complexity requiring integrated treatment.",
   
-  "familyHistoryAnalysis": "3-4 sentences. If family history documented:
-    - 'Patient reports family history of [specific substances/conditions], indicating genetic predisposition and intergenerational transmission of addictive disorders'
-    - 'Familial patterns suggest epigenetic vulnerability and learned maladaptive coping mechanisms'
-    - 'This genetic loading increases patient's risk for treatment-resistant course and necessitates intensive intervention'
-    If no family history documented, note: 'Family history assessment pending; however, presenting severity suggests constitutional vulnerability to substance use disorder'",
+  "dimension4Readiness": "ASAM DIMENSION 4: READINESS TO CHANGE / TREATMENT ACCEPTANCE (4-6 sentences MINIMUM)
+    Assess documented motivation level and treatment history:
+    - Prior treatment failures → 'patient has history of [X] previous treatment attempts at lower levels of care, demonstrating that outpatient and IOP settings have been insufficient to establish sustained recovery'
+    - Current motivation → elaborate on patient's stated readiness, acknowledgment of problem severity, and willingness to engage
+    - Ambivalence → 'patient demonstrates mixed motivation typical of early recovery, requiring structured environment to maintain engagement and prevent premature departure'
+    - External pressures → 'legal mandates, family pressure, or employment contingencies creating external motivation that requires structured setting to convert to internalized recovery motivation'
+    Conclude why residential level needed to overcome ambivalence and build intrinsic motivation.",
   
-  "medicalNecessitySummary": "6-8 sentences MINIMUM. Comprehensive ASAM-based justification:
-    - Cite specific ASAM Criteria dimensions affected
-    - Reference inability to maintain sobriety in less restrictive settings (prior treatment failures, outpatient inadequacy)
-    - Emphasize need for 24-hour structured programming with medical monitoring
-    - Note safety concerns requiring supervised environment
-    - Reference specific symptoms/conditions from patient data that justify residential level
-    - State medical necessity for length of stay based on severity
-    - Conclude with statement that patient meets criteria for residential/detox level per ASAM",
+  "dimension5RelapsePotential": "ASAM DIMENSION 5: RELAPSE, CONTINUED USE, OR CONTINUED PROBLEM POTENTIAL (6-8 sentences MINIMUM - THIS IS CRITICAL)
+    THIS DIMENSION IS ESSENTIAL FOR JUSTIFYING EXTENDED RESIDENTIAL STAY. Elaborate extensively on ALL relapse risk factors:
+    - Family history of addiction → 'patient reports family history of heavy alcohol use/substance dependence in first-degree relatives, indicating genetic predisposition and intergenerational transmission of addictive disorders, with epigenetic vulnerability increasing relapse risk'
+    - Legal charges from intoxicated incident → 'pending legal charges stemming from [accident/incident while intoxicated] create dual pressure: ongoing stressor elevating relapse risk AND potential legal consequences providing external motivation for treatment engagement; however, legal stress itself is known relapse precipitant'
+    - Unemployment → 'current unemployment status results in loss of structured daily activities, removal of prosocial occupational identity, financial stress, and excessive unstructured time - all evidence-based relapse precipitants requiring residential structure to address'
+    - Failed prior treatment → 'history of relapse following previous treatment episodes demonstrates patient lacks sufficient coping skills and relapse prevention strategies to maintain sobriety without intensive intervention'
+    - Cravings/triggers → 'patient reports [specific triggers] in home environment that will precipitate relapse if discharged prematurely'
+    - Social network → 'peer group consists primarily of active substance users, creating high-risk social environment incompatible with early recovery'
+    Use terms: 'high relapse potential', 'inadequate coping repertoire', 'environmental triggers', 'insufficient recovery capital', 'requires extended treatment duration to establish neurobiological stabilization'",
   
-  "recommendedDays": "Integer 21-30. Base on severity:
-    - 21 for moderate presentations
-    - 25-28 for polysubstance dependence, psychiatric comorbidity, or significant psychosocial barriers
-    - 28-30 for high medical complexity, suicide risk, or severe trauma history",
+  "dimension6Environment": "ASAM DIMENSION 6: RECOVERY/LIVING ENVIRONMENT (5-7 sentences MINIMUM)
+    Elaborate on ALL environmental barriers to recovery:
+    - Housing instability → 'unstable or unsafe living arrangements preclude establishment of stable recovery routine and eliminate possibility of successful outpatient treatment'
+    - Enabling family → 'family system demonstrates enabling behaviors and/or expressed criticism that would undermine recovery efforts if patient returned prematurely'
+    - Access to substances → 'home environment has ready access to substances and/or drug-using peers, creating unacceptable relapse risk'
+    - Lack of support → 'patient lacks sober support network and has not established connection with recovery community (AA/NA), requiring residential setting to build recovery capital'
+    - Geographic isolation → 'limited access to outpatient treatment services in patient's community necessitates residential treatment'
+    Emphasize that recovery environment is incompatible with successful outpatient treatment.",
   
-  "levelOfCareJustification": "4-5 sentences. Explicitly state why lower levels of care are contraindicated:
-    - 'Outpatient treatment is contraindicated given [specific factors from data]'
-    - 'Patient requires 24-hour nursing availability for withdrawal monitoring and medication management'
-    - 'Structured residential programming necessary to establish initial abstinence, develop coping skills, and address co-occurring conditions in integrated setting'
-    - 'Home environment lacks structure and support necessary for early recovery stability'"
+  "familyHistoryAnalysis": "3-4 sentences on family history significance for relapse risk:
+    - 'Patient reports family history of [specific substances/conditions in parents/siblings], indicating genetic predisposition with estimated 40-60% heritability for substance use disorders'
+    - 'Intergenerational transmission patterns suggest both genetic vulnerability and learned maladaptive coping mechanisms acquired through family modeling'
+    - 'This genetic loading significantly increases patient's risk for chronic, relapsing course and necessitates intensive, extended intervention to establish stable recovery'
+    If no family history documented, note assessment is pending.",
+  
+  "medicalNecessitySummary": "COMPREHENSIVE MEDICAL NECESSITY (8-10 sentences MINIMUM)
+    Synthesize all 6 ASAM dimensions into medical necessity justification:
+    - 'Based on multidimensional ASAM assessment, patient meets criteria for [Residential/Detox] level of care'
+    - Cite specific dimension findings: 'Dimension 1: active withdrawal requiring medical monitoring; Dimension 2: [medical conditions]; Dimension 3: [psychiatric comorbidities]; Dimension 4: [readiness factors]; Dimension 5: HIGH relapse potential due to [family history, legal issues, unemployment]; Dimension 6: [environment barriers]'
+    - 'Patient has demonstrated inability to maintain sobriety in less restrictive settings, with [X] prior treatment failures at outpatient/IOP level'
+    - 'The constellation of withdrawal severity, medical complexity, psychiatric comorbidity, and psychosocial destabilization necessitates 24-hour structured programming with continuous nursing availability'
+    - 'Extended length of stay is medically necessary to achieve neurobiological stabilization, develop relapse prevention skills, address co-occurring conditions, and establish linkage to continuing care'
+    - State recommended length of stay with clinical rationale
+    - 'Discharge to lower level of care is contraindicated until patient demonstrates [specific milestones]'",
+  
+  "recommendedDays": "Integer 25-30. Base on cumulative severity across all dimensions:
+    - 25 for moderate presentations with some protective factors
+    - 28 for polysubstance dependence, psychiatric comorbidity, or significant Dimension 5/6 barriers
+    - 30 for complex presentations with medical complications, high suicide risk, severe trauma, or multiple failed prior treatments",
+  
+  "levelOfCareJustification": "5-6 sentences. Explicitly state why lower levels of care are contraindicated:
+    - 'Outpatient and Intensive Outpatient treatment are clinically contraindicated given [cite specific Dimension 5 and 6 barriers]'
+    - 'Patient requires 24-hour nursing availability for withdrawal monitoring, medication management, and safety observation'
+    - 'Residential level of care is necessary to provide structured, substance-free environment absent in patient's home setting'
+    - 'Integrated dual-diagnosis programming addresses co-occurring psychiatric conditions that cannot be safely managed in outpatient setting'
+    - 'Patient's high relapse potential and compromised recovery environment require residential containment to prevent treatment dropout and relapse during vulnerable early recovery period'"
 }
 
-OUTPUT REQUIREMENT: Each field must be substantially longer and more clinically detailed than the raw input data. Transform brief patient data into comprehensive clinical documentation suitable for insurance authorization.`;
+OUTPUT REQUIREMENT: Each ASAM dimension must be comprehensively addressed with multiple sentences. Dimension 5 (Relapse Potential) is CRITICAL for justifying extended stay - elaborate extensively on family history, legal issues, unemployment, and other relapse factors. Transform brief patient data into comprehensive clinical documentation that justifies maximum appropriate length of residential treatment.`;
 
     const response = await grok.chat.completions.create({
       model: "grok-2-1212",
@@ -309,13 +352,18 @@ OUTPUT REQUIREMENT: Each field must be substantially longer and more clinically 
     };
     
     const justifications: ClinicalJustificationData = {
-      withdrawalRiskAnalysis: validateString(rawJustifications.withdrawalRiskAnalysis, 'withdrawalRiskAnalysis'),
-      coOccurringConditionsAnalysis: validateString(rawJustifications.coOccurringConditionsAnalysis, 'coOccurringConditionsAnalysis'),
-      psychosocialImpairmentAnalysis: validateString(rawJustifications.psychosocialImpairmentAnalysis, 'psychosocialImpairmentAnalysis'),
+      // All 6 ASAM Dimensions
+      dimension1Withdrawal: validateString(rawJustifications.dimension1Withdrawal, 'dimension1Withdrawal'),
+      dimension2Biomedical: validateString(rawJustifications.dimension2Biomedical, 'dimension2Biomedical'),
+      dimension3Psychiatric: validateString(rawJustifications.dimension3Psychiatric, 'dimension3Psychiatric'),
+      dimension4Readiness: validateString(rawJustifications.dimension4Readiness, 'dimension4Readiness'),
+      dimension5RelapsePotential: validateString(rawJustifications.dimension5RelapsePotential, 'dimension5RelapsePotential'),
+      dimension6Environment: validateString(rawJustifications.dimension6Environment, 'dimension6Environment'),
+      // Summaries
       familyHistoryAnalysis: validateString(rawJustifications.familyHistoryAnalysis, 'familyHistoryAnalysis'),
       medicalNecessitySummary: validateString(rawJustifications.medicalNecessitySummary, 'medicalNecessitySummary'),
       recommendedDays: typeof rawJustifications.recommendedDays === 'number' && rawJustifications.recommendedDays >= 7 && rawJustifications.recommendedDays <= 45
-        ? rawJustifications.recommendedDays : 25,
+        ? rawJustifications.recommendedDays : 28,
       levelOfCareJustification: validateString(rawJustifications.levelOfCareJustification, 'levelOfCareJustification'),
     };
     
@@ -2826,12 +2874,12 @@ async function generateAdmissionsReportPdf(
       addField("Severity of Illness", preCertData.severityOfIllness);
     }
     
-    // Clinical Analysis - use AI when available, otherwise static fallback
+    // ASAM Dimension 1: Withdrawal Analysis - use AI when available, otherwise static fallback
     doc.moveDown(0.2);
-    doc.font("Helvetica-Bold").text("Clinical Impression:");
+    doc.font("Helvetica-Bold").text("ASAM Dimension 1 - Acute Intoxication/Withdrawal:");
     doc.font("Helvetica");
-    if (clinicalJustifications?.withdrawalRiskAnalysis) {
-      addText(clinicalJustifications.withdrawalRiskAnalysis);
+    if (clinicalJustifications?.dimension1Withdrawal) {
+      addText(clinicalJustifications.dimension1Withdrawal);
     } else if (preCertData?.withdrawalSymptoms && preCertData.withdrawalSymptoms.length > 0) {
       addText(`Patient presents with ${preCertData.withdrawalSymptoms.length} withdrawal symptom(s) requiring monitoring and medical supervision during detoxification.`);
     } else {
@@ -2884,12 +2932,19 @@ async function generateAdmissionsReportPdf(
     addField("Suicidal Ideation", preCertData?.suicidalIdeation);
     addField("Homicidal Ideation", preCertData?.homicidalIdeation);
     
-    // AI-enhanced co-occurring conditions analysis (supplemental)
-    if (clinicalJustifications?.coOccurringConditionsAnalysis) {
+    // ASAM Dimensions 2 & 3: Biomedical and Psychiatric (supplemental)
+    if (clinicalJustifications?.dimension2Biomedical) {
       doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Co-occurring Conditions Analysis:");
+      doc.font("Helvetica-Bold").text("ASAM Dimension 2 - Biomedical Conditions:");
       doc.font("Helvetica");
-      addText(clinicalJustifications.coOccurringConditionsAnalysis);
+      addText(clinicalJustifications.dimension2Biomedical);
+    }
+    
+    if (clinicalJustifications?.dimension3Psychiatric) {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").text("ASAM Dimension 3 - Psychiatric/Cognitive Conditions:");
+      doc.font("Helvetica");
+      addText(clinicalJustifications.dimension3Psychiatric);
     }
     
     // ============ SECTION 9: PSYCHOSOCIAL ============
@@ -2913,12 +2968,28 @@ async function generateAdmissionsReportPdf(
       addField("Barriers to Treatment", preScreeningData.barriers);
     }
     
-    // Psychosocial Analysis - use AI when available, otherwise static fallback
-    if (clinicalJustifications?.psychosocialImpairmentAnalysis) {
+    // ASAM Dimension 4: Readiness to Change
+    if (clinicalJustifications?.dimension4Readiness) {
       doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").text("Psychosocial Impairment Analysis:");
+      doc.font("Helvetica-Bold").text("ASAM Dimension 4 - Readiness to Change:");
       doc.font("Helvetica");
-      addText(clinicalJustifications.psychosocialImpairmentAnalysis);
+      addText(clinicalJustifications.dimension4Readiness);
+    }
+    
+    // ASAM Dimension 5: Relapse Potential (CRITICAL for extended stay justification)
+    if (clinicalJustifications?.dimension5RelapsePotential) {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").text("ASAM Dimension 5 - Relapse/Continued Use Potential:");
+      doc.font("Helvetica");
+      addText(clinicalJustifications.dimension5RelapsePotential);
+    }
+    
+    // ASAM Dimension 6: Recovery Environment
+    if (clinicalJustifications?.dimension6Environment) {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").text("ASAM Dimension 6 - Recovery Environment:");
+      doc.font("Helvetica");
+      addText(clinicalJustifications.dimension6Environment);
     }
     
     // Family History (structured with fallback)
