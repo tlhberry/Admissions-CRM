@@ -202,6 +202,8 @@ router.post("/register", async (req: Request, res: Response) => {
 
     // Check if current user is admin
     const currentUser = req.user as any;
+    console.log("[register] Session user:", JSON.stringify(currentUser));
+    console.log("[register] Session:", JSON.stringify(req.session));
     if (!currentUser || currentUser.role !== "admin") {
       return res.status(403).json({ message: "Only administrators can create new users" });
     }
