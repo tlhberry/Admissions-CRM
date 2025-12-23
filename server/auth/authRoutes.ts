@@ -202,12 +202,17 @@ router.post("/register", async (req: Request, res: Response) => {
 
     // Check if current user is admin - use session userId for custom auth
     const sessionUserId = (req.session as any).userId;
+    console.log("[register] Session check - userId:", sessionUserId, "type:", typeof sessionUserId);
+    console.log("[register] Full session:", JSON.stringify(req.session));
+    
     if (!sessionUserId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
     // Look up the current user to verify admin role
     const [currentUser] = await db.select().from(users).where(eq(users.id, sessionUserId));
+    console.log("[register] Found user:", currentUser?.email, "role:", currentUser?.role);
+    
     if (!currentUser || currentUser.role !== "admin") {
       return res.status(403).json({ message: "Only administrators can create new users" });
     }
