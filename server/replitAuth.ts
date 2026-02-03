@@ -36,11 +36,11 @@ export function getSession() {
     saveUninitialized: false,
     rolling: true, // Reset cookie expiration on each request
     cookie: {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: SESSION_TIMEOUT_MS, // 15 minutes
-    },
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", // Only require HTTPS in production
+    sameSite: "lax",
+    maxAge: SESSION_TIMEOUT_MS,
+  },
   });
 }
 
@@ -101,78 +101,24 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
-
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
-  };
-
-  const registeredStrategies = new Set<string>();
-
-  const ensureStrategy = (domain: string) => {
-    const strategyName = `replitauth:${domain}`;
-    if (!registeredStrategies.has(strategyName)) {
-      const strategy = new Strategy(
-        {
-          name: strategyName,
-          config,
-          scope: "openid email profile offline_access",
-          callbackURL: `https://${domain}/api/callback`,
-        },
-        verify
-      );
-      passport.use(strategy);
-      registeredStrategies.add(strategyName);
-    }
-  };
-
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  app.get("/api/login", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
+  // Disable Replit OAuth endpoints - use password auth instead
+  app.get("/api/login", (req, res) => {
+    res.redirect("/login"); // Redirect to password login page
   });
 
-  app.get("/api/callback", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, (err: any, user: any, info: any) => {
-      if (err) return next(err);
-      if (!user) return res.redirect("/api/login");
-      
-      // Regenerate session on login for security (prevents session fixation)
-      req.session.regenerate((regenerateErr) => {
-        if (regenerateErr) return next(regenerateErr);
-        
-        req.login(user, (loginErr) => {
-          if (loginErr) return next(loginErr);
-          res.redirect("/");
-        });
-      });
-    })(req, res, next);
+  app.get("/api/callback", (req, res) => {
+    res.redirect("/login");
   });
 
   app.get("/api/logout", (req, res) => {
-    const logoutUrl = client.buildEndSessionUrl(config, {
-      client_id: process.env.REPL_ID!,
-      post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-    }).href;
-    
-    // Destroy session completely on logout
     req.session.destroy((err) => {
       if (err) console.error("Session destruction error:", err);
       req.logout(() => {
         res.clearCookie("connect.sid");
-        res.redirect(logoutUrl);
+        res.redirect("/login");
       });
     });
   });
