@@ -1,3 +1,4 @@
+import { registerAiRoutes } from "./aiRoutes";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, logAudit, type InquiryFilters } from "./storage";
@@ -469,6 +470,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+  registerAiRoutes(app);
 
   // HIPAA-compliant email/password + 2FA auth routes
   app.use("/api/auth", authRoutes);
