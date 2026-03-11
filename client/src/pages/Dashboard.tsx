@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -198,14 +199,7 @@ export default function Dashboard() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <Button 
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/search")}
-              data-testid="button-search"
-            >
-              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Button>
+            <GlobalSearch />>
             
             <Button 
               variant="outline"
