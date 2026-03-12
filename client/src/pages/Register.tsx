@@ -177,6 +177,7 @@ export default function Register() {
                             <Input
                               placeholder="John"
                               className="pl-10"
+                              autoComplete="off"
                               data-testid="input-first-name"
                               {...field}
                             />
@@ -196,6 +197,7 @@ export default function Register() {
                         <FormControl>
                           <Input
                             placeholder="Doe"
+                            autoComplete="off"
                             data-testid="input-last-name"
                             {...field}
                           />
@@ -219,7 +221,7 @@ export default function Register() {
                             type="email"
                             placeholder="you@example.com"
                             className="pl-10"
-                            autoComplete="email"
+                            autoComplete="off"
                             data-testid="input-email"
                             {...field}
                           />
@@ -242,6 +244,7 @@ export default function Register() {
                           <Input
                             placeholder="Your Treatment Center"
                             className="pl-10"
+                            autoComplete="off"
                             data-testid="input-organization"
                             {...field}
                           />
@@ -265,7 +268,7 @@ export default function Register() {
                             type="password"
                             placeholder="At least 12 characters"
                             className="pl-10"
-                            autoComplete="new-password"
+                            autoComplete="off"
                             data-testid="input-password"
                             {...field}
                           />
@@ -289,7 +292,7 @@ export default function Register() {
                             type="password"
                             placeholder="Confirm your password"
                             className="pl-10"
-                            autoComplete="new-password"
+                            autoComplete="off"
                             data-testid="input-confirm-password"
                             {...field}
                           />
