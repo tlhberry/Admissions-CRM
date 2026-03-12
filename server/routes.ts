@@ -556,9 +556,15 @@ export async function registerRoutes(
       if (!user?.companyId) {
         return res.status(404).json({ message: "No company associated with user" });
       }
-      const company = await storage.getCompany(user.companyId);
+      let company = await storage.getCompany(user.companyId);
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
+      }
+      // Auto-generate webhook token for legacy accounts
+      if (!company.ctmWebhookToken) {
+        company = await storage.updateCompany(user.companyId, {
+          ctmWebhookToken: storage.generateWebhookToken(),
+        }) ?? company;
       }
       res.json(company);
     } catch (error) {
