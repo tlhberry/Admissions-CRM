@@ -13,7 +13,7 @@ import {
   callLogs,
   inquiryPhoneMap,
   billingAccounts,
-  billingInvoices,
+  billingInvoices
   billingEvents,
   contactSubmissions,
   inquiryStageStatus,
@@ -204,7 +204,7 @@ export class DatabaseStorage implements IStorage {
     return company;
   }
 
-  private generateWebhookToken(): string {
+  public generateWebhookToken(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     let token = '';
     for (let i = 0; i < 32; i++) {
