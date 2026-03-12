@@ -38,6 +38,7 @@ export default function Register() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [agreeToTerms, setAgreeToTerms] = useState(true);
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -303,11 +304,26 @@ export default function Register() {
                   )}
                 />
 
+                <div className="flex items-start space-x-2 text-sm text-muted-foreground my-2">
+                  <input
+                    type="checkbox"
+                    id="agreeToTerms"
+                    checked={agreeToTerms}
+                    onChange={(e) => setAgreeToTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="agreeToTerms" className="cursor-pointer leading-tight">
+                    I agree to the{" "}
+                    <a href="/terms" target="_blank" className="text-primary hover:underline">Terms of Service</a>
+                    {" "}and{" "}
+                    <a href="/privacy" target="_blank" className="text-primary hover:underline">Privacy Policy</a>
+                  </label>
+                </div>
                 <Button
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={registerMutation.isPending}
+                  disabled={registerMutation.isPending || !agreeToTerms}
                   data-testid="button-register-submit"
                 >
                   {registerMutation.isPending ? (
