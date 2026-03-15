@@ -309,24 +309,32 @@ export default function AdminSettings() {
 
       <main className="p-4 max-w-4xl mx-auto">
         <Tabs defaultValue="company" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="company" data-testid="tab-company">
-              <Building2 className="w-4 h-4 mr-2" />
-              Company
-            </TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users">
-              <Users className="w-4 h-4 mr-2" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="billing" data-testid="tab-billing">
-              <CreditCard className="w-4 h-4 mr-2" />
-              Billing
-            </TabsTrigger>
-            <TabsTrigger value="ctm" data-testid="tab-ctm">
-              <Webhook className="w-4 h-4 mr-2" />
-              CTM
-            </TabsTrigger>
-          </TabsList>
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2 py-2">
+              <TabsTrigger value="company" className="w-full justify-center">
+                <div className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2">
+                  <Building2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">Company</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger value="users" className="w-full justify-center">
+                <div className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2">
+                  <Users className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">Users</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger value="billing" className="w-full justify-center">
+                <div className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2">
+                  <CreditCard className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">Billing</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger value="ctm" className="w-full justify-center">
+                <div className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2">
+                  <Webhook className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">CTM Subscription</span>
+                </div>
+              </TabsTrigger>
+            </TabsList>
 
           <TabsContent value="company">
             <Card>
