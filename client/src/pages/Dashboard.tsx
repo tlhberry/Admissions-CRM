@@ -199,7 +199,7 @@ export default function Dashboard() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <GlobalSearch />>
+            <GlobalSearch />
             
             <Button 
               variant="outline"
