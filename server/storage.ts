@@ -13,7 +13,7 @@ import {
   callLogs,
   inquiryPhoneMap,
   billingAccounts,
-  billingInvoices
+  billingInvoices,
   billingEvents,
   contactSubmissions,
   inquiryStageStatus,
