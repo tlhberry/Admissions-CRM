@@ -1,7 +1,5 @@
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
-export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+export const anthropicClient = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
 });
-
