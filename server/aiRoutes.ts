@@ -8,29 +8,39 @@ import { storage } from './storage';
 import { isAuthenticated } from './replitAuth';
 
 // ---------------------------------------------------------------------------
-// Shared Anthropic client + helper (runAI / callAnthropic are the same thing)
+// API key guard — log a clear warning at startup so it's easy to spot
+// ---------------------------------------------------------------------------
+if (!process.env.ANTHROPIC_API_KEY) {
+        console.warn('[aiRoutes] WARNING: ANTHROPIC_API_KEY is not set. All AI endpoints will return 503.');
+}
+
+// ---------------------------------------------------------------------------
+// Shared Anthropic client + runAI helper
 // ---------------------------------------------------------------------------
 
 const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+        apiKey: process.env.ANTHROPIC_API_KEY ?? 'missing',
 });
 
 const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 
 async function runAI(prompt: string): Promise<string> {
-      const res = await anthropic.messages.create({
-              model: ANTHROPIC_MODEL,
-              max_tokens: 4096,
-              messages: [{ role: 'user', content: prompt }],
-      });
-      return res.content[0]?.type === 'text' ? res.content[0].text : '';
+        if (!process.env.ANTHROPIC_API_KEY) {
+                  throw new Error('ANTHROPIC_API_KEY environment variable is not configured.');
+        }
+        const res = await anthropic.messages.create({
+                  model: ANTHROPIC_MODEL,
+                  max_tokens: 4096,
+                  messages: [{ role: 'user', content: prompt }],
+        });
+        return res.content[0]?.type === 'text' ? res.content[0].text : '';
 }
 
-// Legacy alias kept so nothing else breaks
+// Legacy alias — keeps any code that was calling callAnthropic() working
 const callAnthropic = runAI;
 
 // ---------------------------------------------------------------------------
-// AWS helpers (Textract + S3) — retained for parse-inquiry file upload flow
+// AWS helpers (Textract + S3) — used by file-upload parse flows
 // ---------------------------------------------------------------------------
 
 const textractClient = new TextractClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
@@ -39,37 +49,60 @@ const S3_BUCKET = process.env.S3_BUCKET ?? '';
 const upload = multer({ storage: multer.memoryStorage() });
 
 async function extractTextViaTextract(buffer: Buffer): Promise<string> {
-      const result = await textractClient.send(
-              new DetectDocumentTextCommand({ Document: { Bytes: buffer } })
-            );
-      return (
-              result.Blocks?.filter((b) => b.BlockType === 'LINE')
-                .map((b) => b.Text ?? '')
-                .join('\n') ?? ''
-            );
+        const result = await textractClient.send(
+                  new DetectDocumentTextCommand({ Document: { Bytes: buffer } })
+                );
+        return (
+                  result.Blocks?.filter((b) => b.BlockType === 'LINE')
+                    .map((b) => b.Text ?? '')
+                    .join('\n') ?? ''
+                );
 }
 
 async function uploadScreenshotToS3(buffer: Buffer, mimeType: string): Promise<void> {
-      await s3Client.send(
-              new PutObjectCommand({
-                        Bucket: S3_BUCKET,
-                        Key: `screenshots/${uuidv4()}`,
-                        Body: buffer,
-                        ContentType: mimeType,
-              })
-            );
+        await s3Client.send(
+                  new PutObjectCommand({
+                              Bucket: S3_BUCKET,
+                              Key: `screenshots/${uuidv4()}`,
+                              Body: buffer,
+                              ContentType: mimeType,
+                  })
+                );
 }
 
 // ---------------------------------------------------------------------------
-// JSON parse helper — strips markdown code fences if present
+// JSON parse helper — strips markdown code fences before JSON.parse
 // ---------------------------------------------------------------------------
 
 function safeParseJSON<T>(raw: string, fallback: T): T {
-      try {
-              return JSON.parse(raw.replace(/```json|```/g, '').trim()) as T;
-      } catch {
-              return fallback;
-      }
+        try {
+                  return JSON.parse(raw.replace(/```json|```/g, '').trim()) as T;
+        } catch {
+                  return fallback;
+        }
+}
+
+// ---------------------------------------------------------------------------
+// Shared AI error handler
+// ---------------------------------------------------------------------------
+
+function handleAiError(error: unknown, res: Response, context: string): Response {
+        console.error(`[aiRoutes] ${context} error:`, error);
+        if (error instanceof Error) {
+                  if (error.message.includes('ANTHROPIC_API_KEY')) {
+                              return res.status(503).json({
+                                            success: false,
+                                            error: 'AI service is not configured. Please set ANTHROPIC_API_KEY in your environment variables.',
+                              });
+                  }
+                  if (error instanceof Anthropic.APIError) {
+                              return res.status(502).json({
+                                            success: false,
+                                            error: `Anthropic API error (${error.status}): ${error.message}`,
+                              });
+                  }
+        }
+        return res.status(500).json({ success: false, error: `Failed to run AI feature: ${context}` });
 }
 
 // ---------------------------------------------------------------------------
@@ -78,326 +111,315 @@ function safeParseJSON<T>(raw: string, fallback: T): T {
 
 export function registerAiRoutes(app: Express): void {
 
-  // ── POST /api/ai/summary ────────────────────────────────────────────────
+  // ── GET /api/ai/status — health check (no auth required) ─────────────────
+  app.get('/api/ai/status', (_req, res: Response) => {
+            const configured = !!process.env.ANTHROPIC_API_KEY;
+            return res.json({
+                        ok: configured,
+                        model: ANTHROPIC_MODEL,
+                        message: configured
+                          ? 'Anthropic API key is configured.'
+                                      : 'ANTHROPIC_API_KEY is missing. Set it in your environment variables.',
+            });
+  });
+
+  // ── POST /api/ai/summary ──────────────────────────────────────────────────
   // Input : { inquiry: object }
   // Output: { success: true, data: string }
   app.post('/api/ai/summary', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const { inquiry } = req.body as { inquiry?: Record<string, unknown> };
-                    if (!inquiry) {
-                                return res.status(400).json({ success: false, error: 'Missing inquiry field.' });
-                    }
+            try {
+                        const { inquiry } = req.body as { inquiry?: Record<string, unknown> };
+                        if (!inquiry || typeof inquiry !== 'object') {
+                                      return res.status(400).json({ success: false, error: 'Missing or invalid "inquiry" field.' });
+                        }
 
-            const prompt = `You are an admissions coordinator at a behavioral health facility.
-            Given the following inquiry data, write a concise 2-4 sentence plain-English summary
-            suitable for a clinician reviewing the lead. Be factual, professional, and highlight
-            the most clinically relevant details (substance, level of care, insurance, urgency).
+              const prompt = `You are an admissions coordinator at a behavioral health facility.
+              Given the following inquiry data, write a concise 2-4 sentence plain-English summary
+              suitable for a clinician reviewing the lead. Be factual, professional, and highlight
+              the most clinically relevant details (substance, level of care, insurance, urgency).
 
-            Inquiry data:
-            ${JSON.stringify(inquiry, null, 2)}
+              Inquiry data:
+              ${JSON.stringify(inquiry, null, 2)}
 
-            Return ONLY the summary text. No JSON, no bullet points, no headers.`;
+              Return ONLY the summary text. No JSON, no bullet points, no headers.`;
 
-            const result = await runAI(prompt);
-                    return res.json({ success: true, data: result.trim() });
-          } catch (error: any) {
-                    console.error('ai/summary error:', error);
-                    return res.status(500).json({ success: false, error: 'Failed to generate summary.' });
-          }
+              const result = await runAI(prompt);
+                        return res.json({ success: true, data: result.trim() });
+            } catch (error) {
+                        return handleAiError(error, res, 'summary');
+            }
   });
 
-  // ── POST /api/ai/parse ──────────────────────────────────────────────────
+  // ── POST /api/ai/parse ────────────────────────────────────────────────────
   // Input : { text: string }  OR  multipart file upload
   // Output: { success: true, data: { name, date_of_birth, phone, email,
   //           insurance_provider, insurance_member_id, group_number,
   //           substance_or_issue, level_of_care, notes } }
   app.post('/api/ai/parse', isAuthenticated, upload.single('file'), async (req: any, res: Response) => {
-          try {
-                    let rawText = '';
+            try {
+                        let rawText = '';
 
-            if (req.file) {
-                        await uploadScreenshotToS3(req.file.buffer, req.file.mimetype);
-                        rawText = await extractTextViaTextract(req.file.buffer);
-            } else if (req.body?.text) {
-                        rawText = req.body.text as string;
-            } else {
-                        return res.status(400).json({ success: false, error: 'Provide a file or a text field.' });
+              if (req.file) {
+                            await uploadScreenshotToS3(req.file.buffer, req.file.mimetype);
+                            rawText = await extractTextViaTextract(req.file.buffer);
+              } else if (req.body?.text) {
+                            rawText = String(req.body.text);
+              } else {
+                            return res.status(400).json({ success: false, error: 'Provide a "text" field or upload a file.' });
+              }
+
+              const emptyFields = {
+                            name: '', date_of_birth: '', phone: '', email: '',
+                            insurance_provider: '', insurance_member_id: '', group_number: '',
+                            substance_or_issue: '', level_of_care: '', notes: '',
+              };
+
+              const prompt = `Extract structured referral / intake fields from the raw call notes or document text below.
+              Return ONLY a valid JSON object — no markdown, no explanation.
+
+              Required fields (use empty string if not found):
+              {
+                "name": "",
+                  "date_of_birth": "",
+                    "phone": "",
+                      "email": "",
+                        "insurance_provider": "",
+                          "insurance_member_id": "",
+                            "group_number": "",
+                              "substance_or_issue": "",
+                                "level_of_care": "",
+                                  "notes": ""
+                                  }
+
+                                  Raw text:
+                                  ${rawText}`;
+
+              const raw = await runAI(prompt);
+                        const fields = safeParseJSON(raw, emptyFields);
+                        return res.json({ success: true, data: fields });
+            } catch (error) {
+                        return handleAiError(error, res, 'parse');
             }
-
-            const emptyFields = {
-                        name: '',
-                        date_of_birth: '',
-                        phone: '',
-                        email: '',
-                        insurance_provider: '',
-                        insurance_member_id: '',
-                        group_number: '',
-                        substance_or_issue: '',
-                        level_of_care: '',
-                        notes: '',
-            };
-
-            const prompt = `Extract structured referral / intake fields from the raw call notes or document text below.
-            Return ONLY a valid JSON object — no markdown, no explanation.
-
-            Required fields (use empty string if not found):
-            {
-              "name": "",
-                "date_of_birth": "",
-                  "phone": "",
-                    "email": "",
-                      "insurance_provider": "",
-                        "insurance_member_id": "",
-                          "group_number": "",
-                            "substance_or_issue": "",
-                              "level_of_care": "",
-                                "notes": ""
-                                }
-
-                                Raw text:
-                                ${rawText}`;
-
-            const raw = await runAI(prompt);
-                    const fields = safeParseJSON(raw, emptyFields);
-
-            return res.json({ success: true, data: fields });
-          } catch (error: any) {
-                    console.error('ai/parse error:', error);
-                    return res.status(500).json({ success: false, error: 'Failed to parse notes.' });
-          }
   });
 
-  // ── POST /api/ai/search ─────────────────────────────────────────────────
+  // ── POST /api/ai/search ───────────────────────────────────────────────────
   // Input : { query: string }
   // Output: { success: true, data: { entity, filters, sql_hint } }
   app.post('/api/ai/search', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const { query } = req.body as { query?: string };
-                    if (!query) {
-                                return res.status(400).json({ success: false, error: 'Missing query field.' });
-                    }
+            try {
+                        const { query } = req.body as { query?: string };
+                        if (!query || typeof query !== 'string' || !query.trim()) {
+                                      return res.status(400).json({ success: false, error: 'Missing or empty "query" field.' });
+                        }
 
-            const prompt = `You are a query parser for a behavioral health admissions CRM.
-            Convert the natural language search below into a structured JSON filter object.
+              const prompt = `You are a query parser for a behavioral health admissions CRM.
+              Convert the natural language search below into a structured JSON filter object.
 
-            Available entities: leads, inquiries, referral_accounts, activities
-            Available filters:
-              - level_of_care: detox | residential | php | iop | outpatient
-                - stage: string (e.g. "new", "contacted", "admitted", "discharged")
-                  - created_after: today | 7_days | 30_days | 90_days
-                    - insurance_provider: string
-                      - substance_or_issue: string
-                        - assigned_to: string (staff name or id)
+              Available entities: leads, inquiries, referral_accounts, activities
+              Available filters:
+                - level_of_care: detox | residential | php | iop | outpatient
+                  - stage: string (e.g. "new", "contacted", "admitted", "discharged")
+                    - created_after: today | 7_days | 30_days | 90_days
+                      - insurance_provider: string
+                        - substance_or_issue: string
+                          - assigned_to: string
 
-                        Return ONLY valid JSON — no markdown, no explanation:
-                        {
-                          "entity": "leads",
-                            "filters": {},
-                              "sql_hint": ""
-                              }
+                          Return ONLY valid JSON — no markdown, no explanation:
+                          {
+                            "entity": "leads",
+                              "filters": {},
+                                "sql_hint": ""
+                                }
 
-                              sql_hint should be a human-readable description of the WHERE clause (e.g. "WHERE level_of_care = 'detox' AND created_at >= NOW() - INTERVAL '7 days'").
+                                sql_hint is a human-readable WHERE clause description.
 
-                              Query: "${query}"`;
+                                Query: "${query.trim()}"`;
 
-            const raw = await runAI(prompt);
-                    const fallback = { entity: 'leads', filters: {}, sql_hint: '' };
-                    const result = safeParseJSON(raw, fallback);
-
-            return res.json({ success: true, data: result });
-          } catch (error: any) {
-                    console.error('ai/search error:', error);
-                    return res.status(500).json({ success: false, error: 'Failed to process search.' });
-          }
+              const raw = await runAI(prompt);
+                        const fallback = { entity: 'inquiries', filters: {}, sql_hint: '' };
+                        const result = safeParseJSON(raw, fallback);
+                        return res.json({ success: true, data: result });
+            } catch (error) {
+                        return handleAiError(error, res, 'search');
+            }
   });
 
-  // ── POST /api/ai/report ─────────────────────────────────────────────────
+  // ── POST /api/ai/report ───────────────────────────────────────────────────
   // Input : { startDate?: string, endDate?: string, filters?: object }
-  // Output: { success: true, data: string  (readable report) }
+  // Output: { success: true, data: string }
   app.post('/api/ai/report', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const { startDate, endDate, filters } = req.body as {
-                                startDate?: string;
-                                endDate?: string;
-                                filters?: Record<string, unknown>;
-                    };
+            try {
+                        const { startDate, endDate, filters } = req.body as {
+                                      startDate?: string;
+                                      endDate?: string;
+                                      filters?: Record<string, unknown>;
+                        };
 
-            const dateRange =
-                        startDate && endDate
-                        ? `${startDate} to ${endDate}`
-                          : startDate
-                        ? `from ${startDate}`
-                          : endDate
-                        ? `through ${endDate}`
-                          : 'all time';
+              const dateRange = startDate && endDate
+                          ? `${startDate} to ${endDate}`
+                            : startDate ? `from ${startDate}`
+                            : endDate   ? `through ${endDate}`
+                            : 'all time';
 
-            const filtersStr = filters ? JSON.stringify(filters, null, 2) : 'None';
+              const filtersStr = filters ? JSON.stringify(filters, null, 2) : 'None';
 
-            const prompt = `You are an admissions analytics assistant for a behavioral health facility.
-            Generate a professional, readable summary report based on the parameters below.
-            Use plain prose with short sections. Include observations about trends, action items,
-            and key metrics. Keep it under 400 words.
+              const prompt = `You are an admissions analytics assistant for a behavioral health facility.
+              Generate a professional, readable summary report based on the parameters below.
+              Use plain prose with short sections. Include observations about trends, action items,
+              and key metrics. Keep it under 400 words.
 
-            Date range: ${dateRange}
-            Applied filters:
-            ${filtersStr}
+              Date range: ${dateRange}
+              Applied filters:
+              ${filtersStr}
 
-            Report sections to include:
-            1. Overview
-            2. Key Metrics (admissions volume, conversion rate estimate, insurance coverage breakdown)
-            3. Notable Trends
-            4. Recommended Next Steps
+              Report sections to include:
+              1. Overview
+              2. Key Metrics (admissions volume, conversion rate estimate, insurance coverage breakdown)
+              3. Notable Trends
+              4. Recommended Next Steps
 
-            Return ONLY the report text. No JSON.`;
+              Return ONLY the report text. No JSON.`;
 
-            const result = await runAI(prompt);
-                    return res.json({ success: true, data: result.trim() });
-          } catch (error: any) {
-                    console.error('ai/report error:', error);
-                    return res.status(500).json({ success: false, error: 'Failed to generate report.' });
-          }
+              const result = await runAI(prompt);
+                        return res.json({ success: true, data: result.trim() });
+            } catch (error) {
+                        return handleAiError(error, res, 'report');
+            }
   });
 
-  // ── POST /api/ai/parse-inquiry (legacy — file + text, original endpoint) ─
+  // ── POST /api/ai/parse-inquiry (legacy — keeps existing integrations working)
   app.post('/api/ai/parse-inquiry', isAuthenticated, upload.single('file'), async (req: any, res: Response) => {
-          try {
-                    let rawText = '';
-                    if (req.file) {
-                                await uploadScreenshotToS3(req.file.buffer, req.file.mimetype);
-                                rawText = await extractTextViaTextract(req.file.buffer);
-                    } else if (req.body?.text) {
-                                rawText = req.body.text as string;
-                    } else {
-                                return res.status(400).json({ message: 'Provide a file or a text field.' });
-                    }
-                    const prompt =
-                                'Extract referral fields and return ONLY JSON: {"name":"","date_of_birth":"","phone":"","email":"","insurance_provider":"","insurance_member_id":"","group_number":"","substance_or_issue":""}. Text: ' +
-                                rawText;
-                    const raw = await callAnthropic(prompt);
-                    const fields = safeParseJSON(raw, {
-                                name: '',
-                                date_of_birth: '',
-                                phone: '',
-                                email: '',
-                                insurance_provider: '',
-                                insurance_member_id: '',
-                                group_number: '',
-                                substance_or_issue: '',
-                    });
-                    return res.json({ fields });
-          } catch (error: any) {
-                    if (error instanceof Anthropic.APIError) {
-                                console.error('parse-inquiry Anthropic error:', error.status, error.message);
-                                return res.status(502).json({ message: 'AI service error: ' + error.message });
-                    }
-                    console.error('parse-inquiry error:', error);
-                    return res.status(500).json({ message: 'Failed to parse inquiry' });
-          }
+            try {
+                        let rawText = '';
+                        if (req.file) {
+                                      await uploadScreenshotToS3(req.file.buffer, req.file.mimetype);
+                                      rawText = await extractTextViaTextract(req.file.buffer);
+                        } else if (req.body?.text) {
+                                      rawText = String(req.body.text);
+                        } else {
+                                      return res.status(400).json({ message: 'Provide a file or a text field.' });
+                        }
+                        const emptyFields = {
+                                      name: '', date_of_birth: '', phone: '', email: '',
+                                      insurance_provider: '', insurance_member_id: '', group_number: '', substance_or_issue: '',
+                        };
+                        const prompt = 'Extract referral fields and return ONLY JSON: '
+                          + JSON.stringify(emptyFields)
+                          + '. Text: ' + rawText;
+                        const raw = await callAnthropic(prompt);
+                        const fields = safeParseJSON(raw, emptyFields);
+                        return res.json({ fields });
+            } catch (error) {
+                        if (error instanceof Anthropic.APIError) {
+                                      return res.status(502).json({ message: 'AI service error: ' + error.message });
+                        }
+                        console.error('[aiRoutes] parse-inquiry error:', error);
+                        return res.status(500).json({ message: 'Failed to parse inquiry' });
+            }
   });
 
-  // ── POST /api/ai/help ────────────────────────────────────────────────────
+  // ── POST /api/ai/help ─────────────────────────────────────────────────────
   app.post('/api/ai/help', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const { question } = req.body as { question?: string };
-                    const answer = await callAnthropic(
-                                'You are a helpful assistant for a behavioral health admissions CRM. Answer concisely: ' + question
-                              );
-                    return res.json({ answer });
-          } catch (error: any) {
-                    if (error instanceof Anthropic.APIError) {
-                                console.error('help Anthropic error:', error.status, error.message);
-                                return res.status(502).json({ message: 'AI service error: ' + error.message });
-                    }
-                    console.error('help error:', error);
-                    return res.status(500).json({ message: 'Failed to get help response' });
-          }
+            try {
+                        const { question } = req.body as { question?: string };
+                        if (!question) {
+                                      return res.status(400).json({ answer: '', error: 'Missing question field.' });
+                        }
+                        const answer = await callAnthropic(
+                                      'You are a helpful assistant for a behavioral health admissions CRM. Answer concisely: ' + question
+                                    );
+                        return res.json({ answer });
+            } catch (error) {
+                        if (error instanceof Anthropic.APIError) {
+                                      return res.status(502).json({ message: 'AI service error: ' + error.message });
+                        }
+                        console.error('[aiRoutes] help error:', error);
+                        return res.status(500).json({ message: 'Failed to get help response' });
+            }
   });
 
-  // ── POST /api/support/message ────────────────────────────────────────────
+  // ── POST /api/support/message ─────────────────────────────────────────────
   app.post('/api/support/message', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const userId: string = req.user?.claims?.sub;
-                    const user = await storage.getUser(userId);
-                    const { message } = req.body as { message?: string };
-                    const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
-                    await storage.createContactSubmission({
-                                email: user?.email ?? '',
-                                phone: null,
-                                companyName: company?.name ?? null,
-                                message: message!.trim(),
-                                source: 'in_app_support',
-                                userId,
-                                status: 'new',
-                    });
-                    return res.status(201).json({ message: 'Support request submitted.' });
-          } catch (error) {
-                    console.error('support/message error:', error);
-                    return res.status(500).json({ message: 'Failed to submit support request' });
-          }
+            try {
+                        const userId: string = req.user?.claims?.sub;
+                        const user = await storage.getUser(userId);
+                        const { message } = req.body as { message?: string };
+                        if (!message) return res.status(400).json({ message: 'Missing message field.' });
+                        const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
+                        await storage.createContactSubmission({
+                                      email: user?.email ?? '',
+                                      phone: null,
+                                      companyName: company?.name ?? null,
+                                      message: message.trim(),
+                                      source: 'in_app_support',
+                                      userId,
+                                      status: 'new',
+                        });
+                        return res.status(201).json({ message: 'Support request submitted.' });
+            } catch (error) {
+                        console.error('[aiRoutes] support/message error:', error);
+                        return res.status(500).json({ message: 'Failed to submit support request' });
+            }
   });
 
-  // ── POST /api/support/bug ────────────────────────────────────────────────
+  // ── POST /api/support/bug ─────────────────────────────────────────────────
   app.post('/api/support/bug', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const userId: string = req.user?.claims?.sub;
-                    const user = await storage.getUser(userId);
-                    const { description, steps, severity } = req.body as {
-                                description?: string;
-                                steps?: string;
-                                severity?: string;
-                    };
-                    const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
-                    const msg = [
-                                '[BUG REPORT]',
-                                'Description: ' + description!.trim(),
-                                steps ? 'Steps: ' + steps.trim() : null,
-                                severity ? 'Severity: ' + severity : null,
-                              ]
-                      .filter(Boolean)
-                      .join('\n');
-                    await storage.createContactSubmission({
-                                email: user?.email ?? '',
-                                phone: null,
-                                companyName: company?.name ?? null,
-                                message: msg,
-                                source: 'in_app_support',
-                                userId,
-                                status: 'new',
-                    });
-                    return res.status(201).json({ message: 'Bug report submitted.' });
-          } catch (error) {
-                    console.error('support/bug error:', error);
-                    return res.status(500).json({ message: 'Failed to submit bug report' });
-          }
+            try {
+                        const userId: string = req.user?.claims?.sub;
+                        const user = await storage.getUser(userId);
+                        const { description, steps, severity } = req.body as {
+                                      description?: string; steps?: string; severity?: string;
+                        };
+                        if (!description) return res.status(400).json({ message: 'Missing description field.' });
+                        const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
+                        const msg = [
+                                      '[BUG REPORT]',
+                                      'Description: ' + description.trim(),
+                                      steps    ? 'Steps: '    + steps.trim()    : null,
+                                      severity ? 'Severity: ' + severity         : null,
+                                    ].filter(Boolean).join('\n');
+                        await storage.createContactSubmission({
+                                      email: user?.email ?? '',
+                                      phone: null,
+                                      companyName: company?.name ?? null,
+                                      message: msg,
+                                      source: 'in_app_support',
+                                      userId,
+                                      status: 'new',
+                        });
+                        return res.status(201).json({ message: 'Bug report submitted.' });
+            } catch (error) {
+                        console.error('[aiRoutes] support/bug error:', error);
+                        return res.status(500).json({ message: 'Failed to submit bug report' });
+            }
   });
 
-  // ── POST /api/support/idea ───────────────────────────────────────────────
+  // ── POST /api/support/idea ────────────────────────────────────────────────
   app.post('/api/support/idea', isAuthenticated, async (req: any, res: Response) => {
-          try {
-                    const userId: string = req.user?.claims?.sub;
-                    const user = await storage.getUser(userId);
-                    const { title, description } = req.body as { title?: string; description?: string };
-                    const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
-                    const msg = [
-                                '[FEATURE IDEA]',
-                                title ? 'Title: ' + title.trim() : null,
-                                'Description: ' + description!.trim(),
-                              ]
-                      .filter(Boolean)
-                      .join('\n');
-                    await storage.createContactSubmission({
-                                email: user?.email ?? '',
-                                phone: null,
-                                companyName: company?.name ?? null,
-                                message: msg,
-                                source: 'in_app_support',
-                                userId,
-                                status: 'new',
-                    });
-                    return res.status(201).json({ message: 'Feature idea submitted.' });
-          } catch (error) {
-                    console.error('support/idea error:', error);
-                    return res.status(500).json({ message: 'Failed to submit feature idea' });
-          }
+            try {
+                        const userId: string = req.user?.claims?.sub;
+                        const user = await storage.getUser(userId);
+                        const { title, description } = req.body as { title?: string; description?: string };
+                        if (!description) return res.status(400).json({ message: 'Missing description field.' });
+                        const company = user?.companyId ? await storage.getCompany(user.companyId) : null;
+                        const msg = [
+                                      '[FEATURE IDEA]',
+                                      title ? 'Title: ' + title.trim() : null,
+                                      'Description: ' + description.trim(),
+                                    ].filter(Boolean).join('\n');
+                        await storage.createContactSubmission({
+                                      email: user?.email ?? '',
+                                      phone: null,
+                                      companyName: company?.name ?? null,
+                                      message: msg,
+                                      source: 'in_app_support',
+                                      userId,
+                                      status: 'new',
+                        });
+                        return res.status(201).json({ message: 'Feature idea submitted.' });
+            } catch (error) {
+                        console.error('[aiRoutes] support/idea error:', error);
+                        return res.status(500).json({ message: 'Failed to submit feature idea' });
+            }
   });
 }
