@@ -1005,3 +1005,63 @@ export const BILLING_PRICES = {
   },
   trialDays: 14,
 } as const;
+
+
+// ========================
+// AI & CENTER CONFIG TABLES
+// ========================
+
+// AI request/response logging for HIPAA audit trail and usage tracking
+export const aiLogs = pgTable("ai_logs", {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").references(() => users.id),
+    route: varchar("route", { length: 100 }).notNull(),
+    promptTokens: integer("prompt_tokens"),
+    completionTokens: integer("completion_tokens"),
+    success: varchar("success", { length: 10 }).notNull().default("yes"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAiLogSchema = createInsertSchema(aiLogs).omit({
+    id: true,
+    createdAt: true,
+});
+export type AiLog = typeof aiLogs.$inferSelect;
+export type InsertAiLog = z.infer<typeof insertAiLogSchema>;
+
+// Cache for expensive AI-generated reports
+export const aiReportCache = pgTable("ai_report_cache", {
+    id: serial("id").primaryKey(),
+    reportType: varchar("report_type", { length: 100 }).notNull(),
+    parametersHash: varchar("parameters_hash", { length: 64 }).notNull(),
+    result: text("result").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const insertAiReportCacheSchema = createInsertSchema(aiReportCache).omit({
+    id: true,
+    createdAt: true,
+});
+export type AiReportCache = typeof aiReportCache.$inferSelect;
+export type InsertAiReportCache = z.infer<typeof insertAiReportCacheSchema>;
+
+// Per-center configuration for white-label deployments
+export const centerConfig = pgTable("center_config", {
+    id: serial("id").primaryKey(),
+    centerName: varchar("center_name", { length: 200 }).notNull(),
+    centerLogoUrl: text("center_logo_url"),
+    primaryColor: varchar("primary_color", { length: 7 }).notNull().default("#1e3a5f"),
+    aiEnabled: varchar("ai_enabled", { length: 10 }).notNull().default("yes"),
+    anthropicApiKeyEncrypted: text("anthropic_api_key_encrypted"),
+    setupComplete: varchar("setup_complete", { length: 10 }).notNull().default("no"),
+    createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCenterConfigSchema = createInsertSchema(centerConfig).omit({
+    id: true,
+    createdAt: true,
+});
+export type CenterConfig = typeof centerConfig.$inferSelect;
+export type InsertCenterConfig = z.infer<typeof insertCenterConfigSchema>;
