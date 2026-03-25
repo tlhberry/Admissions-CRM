@@ -1,0 +1,75 @@
+# deploy/docker-compose.yml
+# Production deployment for AdmitSimple (Admissions-CRM)
+# Usage: docker compose --env-file .env up -d
+
+version: "3.9"
+
+services:
+  app:
+      build:
+            context: ..
+                  dockerfile: Dockerfile
+                      restart: unless-stopped
+                          env_file: .env
+                              environment:
+                                    - NODE_ENV=production
+                                          - PORT=5000
+                                              ports:
+                                                    - "5000:5000"
+                                                        depends_on:
+                                                              db:
+                                                                      condition: service_healthy
+                                                                          volumes:
+                                                                                - uploads_data:/app/uploads
+                                                                                    networks:
+                                                                                          - admitsimple_net
+                                                                                              healthcheck:
+                                                                                                    test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+                                                                                                          interval: 30s
+                                                                                                                timeout: 10s
+                                                                                                                      retries: 3
+                                                                                                                            start_period: 40s
+                                                                                                                            
+                                                                                                                              db:
+                                                                                                                                  image: postgres:16-alpine
+                                                                                                                                      restart: unless-stopped
+                                                                                                                                          env_file: .env
+                                                                                                                                              environment:
+                                                                                                                                                    - POSTGRES_DB=${POSTGRES_DB:-admitsimple}
+                                                                                                                                                          - POSTGRES_USER=${POSTGRES_USER:-admitsimple}
+                                                                                                                                                                - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+                                                                                                                                                                    volumes:
+                                                                                                                                                                          - postgres_data:/var/lib/postgresql/data
+                                                                                                                                                                              networks:
+                                                                                                                                                                                    - admitsimple_net
+                                                                                                                                                                                        healthcheck:
+                                                                                                                                                                                              test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admitsimple}"]
+                                                                                                                                                                                                    interval: 10s
+                                                                                                                                                                                                          timeout: 5s
+                                                                                                                                                                                                                retries: 5
+                                                                                                                                                                                                                    # Do NOT expose port 5432 to the host in production
+                                                                                                                                                                                                                    
+                                                                                                                                                                                                                      nginx:
+                                                                                                                                                                                                                          image: nginx:1.25-alpine
+                                                                                                                                                                                                                              restart: unless-stopped
+                                                                                                                                                                                                                                  ports:
+                                                                                                                                                                                                                                        - "80:80"
+                                                                                                                                                                                                                                              - "443:443"
+                                                                                                                                                                                                                                                  volumes:
+                                                                                                                                                                                                                                                        - ./nginx.conf:/etc/nginx/nginx.conf:ro
+                                                                                                                                                                                                                                                              - /etc/letsencrypt:/etc/letsencrypt:ro
+                                                                                                                                                                                                                                                                    - /var/www/certbot:/var/www/certbot:ro
+                                                                                                                                                                                                                                                                        depends_on:
+                                                                                                                                                                                                                                                                              - app
+                                                                                                                                                                                                                                                                                  networks:
+                                                                                                                                                                                                                                                                                        - admitsimple_net
+                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                        volumes:
+                                                                                                                                                                                                                                                                                          postgres_data:
+                                                                                                                                                                                                                                                                                              driver: local
+                                                                                                                                                                                                                                                                                                uploads_data:
+                                                                                                                                                                                                                                                                                                    driver: local
+                                                                                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                                    networks:
+                                                                                                                                                                                                                                                                                                      admitsimple_net:
+                                                                                                                                                                                                                                                                                                          driver: bridge
