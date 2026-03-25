@@ -306,10 +306,6 @@ export class DatabaseStorage implements IStorage {
     if (filters.levelOfCare) {
       conditions.push(ilike(inquiries.levelOfCare, `%${filters.levelOfCare}%`));
     }
-
-    if (filters.substanceOrIssue) {
-      conditions.push(ilike(inquiries.substanceOrIssue, `%${filters.substanceOrIssue}%`));
-    }
     if (filters.startDate) {
       conditions.push(gte(inquiries.callDateTime, new Date(filters.startDate)));
     }
