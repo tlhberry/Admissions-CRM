@@ -68,6 +68,8 @@ export interface InquiryFilters {
   insuranceProvider?: string;
   startDate?: string;
   endDate?: string;
+  levelOfCare?: string;
+  substanceOrIssue?: string;
 }
 
 export interface IStorage {
@@ -301,6 +303,13 @@ export class DatabaseStorage implements IStorage {
       conditions.push(ilike(inquiries.insuranceProvider, `%${filters.insuranceProvider}%`));
     }
 
+    if (filters.levelOfCare) {
+      conditions.push(ilike(inquiries.levelOfCare, `%${filters.levelOfCare}%`));
+    }
+
+    if (filters.substanceOrIssue) {
+      conditions.push(ilike(inquiries.substanceOrIssue, `%${filters.substanceOrIssue}%`));
+    }
     if (filters.startDate) {
       conditions.push(gte(inquiries.callDateTime, new Date(filters.startDate)));
     }
