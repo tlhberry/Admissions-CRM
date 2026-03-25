@@ -69,6 +69,7 @@ interface SearchFilters {
   insuranceProvider: string;
   startDate: string;
   endDate: string;
+  levelOfCare: string;
 }
 
 export default function Search() {
@@ -80,6 +81,7 @@ export default function Search() {
     insuranceProvider: "",
     startDate: "",
     endDate: "",
+    levelOfCare: "",
   });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -91,6 +93,7 @@ export default function Search() {
     if (filters.insuranceProvider) params.append("insuranceProvider", filters.insuranceProvider);
     if (filters.startDate) params.append("startDate", filters.startDate);
     if (filters.endDate) params.append("endDate", filters.endDate);
+    if (filters.levelOfCare) params.append("levelOfCare", filters.levelOfCare);
     const queryString = params.toString();
     return `/api/inquiries/search${queryString ? `?${queryString}` : ""}`;
   };
