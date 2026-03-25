@@ -739,6 +739,8 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         insuranceProvider: req.query.insuranceProvider as string | undefined,
         startDate: req.query.startDate as string | undefined,
         endDate: req.query.endDate as string | undefined,
+        levelOfCare: req.query.levelOfCare as string | undefined,
+        substanceOrIssue: req.query.substanceOrIssue as string | undefined,
       };
 
       const inquiries = await storage.searchInquiries(companyId, filters);
