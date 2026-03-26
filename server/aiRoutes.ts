@@ -9,7 +9,7 @@ import PDFDocument from 'pdfkit';
 import rateLimit from 'express-rate-limit';
 import { storage } from './storage';
 import { isAuthenticated } from './replitAuth';
-import { db } from './db';
+import { db } from './db';h
 import { deidentifyInquiry } from './lib/deidentify';
 import {
   aiLogs,
@@ -155,16 +155,13 @@ export function registerAiRoutes(app: Express): void {
   // Apply per-user rate limit to all /api/ai/* routes
   app.use('/api/ai/', aiUserRateLimiter);
 
-  // ── ROUTE 10: GET /api/ai/status (no auth, health check) ─────────────────
-  app.get('/api/ai/status', (_req: Request, res: Response) => {
+    // ── ROUTE 10: GET /api/ai/status ────────────────────────────────────────
+  app.get('/api/ai/status', isAuthenticated, async (req: any, res: Response) => {
     const configured = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'missing');
     return res.json({
-      ok: configured,
+      ai_configured: configured,
       model: ANTHROPIC_MODEL,
-      message: configured
-        ? 'Anthropic API key is configured.'
-        : 'ANTHROPIC_API_KEY is missing.',
-      timestamp: new Date().toISOString(),
+        center_configured: !!(await getCenterName() !== 'AdmitSimple'),
     });
   });
 
