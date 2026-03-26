@@ -20,6 +20,14 @@ import ReferralAccounts from "@/pages/ReferralAccounts";
 import Reports from "@/pages/Reports";
 import AdminSettings from "@/pages/AdminSettings";
 import StageBoard from "@/pages/StageBoard";
+import AIHub from "@/pages/AIHub";
+import AIParser from "@/pages/AIParser";
+import AISearch from "@/pages/AISearch";
+import AIInsights from "@/pages/AIInsights";
+import AIReports from "@/pages/AIReports";
+import AIAdmissionsReports from "@/pages/AIAdmissionsReports";
+import AIReferralInsights from "@/pages/AIReferralInsights";
+import AIPipelineOptimizer from "@/pages/AIPipelineOptimizer";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -59,6 +67,15 @@ function Router() {
           <Route path="/reports" component={Reports} />
           <Route path="/admin" component={AdminSettings} />
           <Route path="/pipeline/:stage" component={StageBoard} />
+          {/* AI Routes */}
+          <Route path="/ai" component={AIHub} />
+          <Route path="/ai/parser" component={AIParser} />
+          <Route path="/ai/search" component={AISearch} />
+          <Route path="/ai/insights" component={AIInsights} />
+          <Route path="/ai/reports" component={AIReports} />
+          <Route path="/ai/admissions-reports" component={AIAdmissionsReports} />
+          <Route path="/ai/referrals" component={AIReferralInsights} />
+          <Route path="/ai/pipeline" component={AIPipelineOptimizer} />
         </>
       )}
       <Route component={NotFound} />
