@@ -222,6 +222,17 @@ export default function Dashboard() {
             >
               <FileBarChart className="w-5 h-5" />
             </Button>
+
+                            <Button
+                                              variant="outline"
+                                                                size="icon"
+                                                                                  onClick={() => navigate("/ai")}
+                                                                                                    data-testid="button-ai-features"
+                                                                                                                      title="AI Features"
+                                                                                                                                        className="hidden sm:flex"
+                                                                                                                                                        >
+                                                                                                                                                                          <Brain className="w-5 h-5" />
+                                                                                                                                                                                          </Button>
             
             <Button 
               variant="outline"
@@ -286,6 +297,11 @@ export default function Dashboard() {
                     Admin Settings
                   </DropdownMenuItem>
                 )}
+                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem onClick={() => navigate("/ai")} className="cursor-pointer" data-testid="menu-ai-features">
+                                                                  <Brain className="w-4 h-4 mr-2" />
+                                                                                    AI Features
+                                                                                                    </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <a href="/api/logout" className="cursor-pointer" data-testid="button-logout">

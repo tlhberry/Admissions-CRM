@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,8 @@ import {
   PhoneOutgoing,
   PhoneIncoming,
   Download,
+    Brain,
+      Loader2,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, NonViableReason, LevelOfCare, LostReason, ReferralAccount, OnlineReferralSource, CallLog } from "@shared/schema";
 import {
@@ -114,6 +116,10 @@ export default function InquiryDetail() {
   const [newAccountName, setNewAccountName] = useState("");
   const [presentingProblemsText, setPresentingProblemsText] = useState("");
   const [selectedViewStage, setSelectedViewStage] = useState<PipelineStage | null>(null);
+    const [showAISummary, setShowAISummary] = useState(false);
+      const [aiSummary, setAiSummary] = useState("");
+        const [isStreamingAI, setIsStreamingAI] = useState(false);
+          const aiAbortRef = useRef<AbortController | null>(null);
 
   const { data: inquiry, isLoading } = useQuery<Inquiry>({
     queryKey: [`/api/inquiries/${id}`],
@@ -318,6 +324,35 @@ export default function InquiryDetail() {
     }
   };
 
+    const handleAISummary = async () => {
+        setAiSummary("");
+            setShowAISummary(true);
+                setIsStreamingAI(true);
+                    aiAbortRef.current = new AbortController();
+                        try {
+                              const res = await fetch(`/api/ai/summary/${id}`, {
+                                      method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                                      signal: aiAbortRef.current.signal,
+                                                            });
+                                                                  if (!res.ok) throw new Error(await res.text());
+                                                                        const reader = res.body?.getReader();
+                                                                              const decoder = new TextDecoder();
+                                                                                    if (!reader) throw new Error("No stream");
+                                                                                          while (true) {
+                                                                                                  const { done, value } = await reader.read();
+                                                                                                          if (done) break;
+                                                                                                                  setAiSummary((prev) => prev + decoder.decode(value));
+                                                                                                                        }
+                                                                                                                            } catch (err: any) {
+                                                                                                                                  if (err.name !== "AbortError") {
+                                                                                                                                          toast({ title: "AI Summary failed", description: err.message, variant: "destructive" });
+                                                                                                                                                }
+                                                                                                                                                    } finally {
+                                                                                                                                                          setIsStreamingAI(false);
+                                                                                                                                                              }
+                                                                                                                                                                };
+
   // Determine which stage to show content for
   const displayStage = selectedViewStage || stage;
 
@@ -408,7 +443,17 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
             <Badge className={`${stageColors[stage!]} border-0`}>
               {stageDisplayNames[stage!]}
             </Badge>
-            <ThemeToggle />
+            <                <Button
+                              variant="outline"
+                                                size="sm"
+                                                                  onClick={handleAISummary}
+                                                                                    data-testid="button-ai-summary"
+                                                                                                      className="hidden sm:flex items-center gap-2"
+                                                                                                                      >
+                                                                                                                                        <Brain className="w-4 h-4" />
+                                                                                                                                                          AI Summary
+                                                                                                                                                                          </Button>
+              ThemeToggle />
           </div>
         </div>
       </header>
@@ -1045,6 +1090,42 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
         onConfirm={handleLost}
         isPending={updateMutation.isPending}
       />
+
+            {/* AI Summary Modal */}
+                  <Dialog open={showAISummary} onOpenChange={(open) => {
+                          if (!open) { aiAbortRef.current?.abort(); setShowAISummary(false); }
+                                }}>
+                                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+                                                  <DialogHeader>
+                                                              <DialogTitle className="flex items-center gap-2">
+                                                                            <Brain className="w-5 h-5 text-primary" />
+                                                                                          AI Summary
+                                                                                                      </DialogTitle>
+                                                                                                                  <DialogDescription>
+                                                                                                                                Streaming summary powered by Claude
+                                                                                                                                            </DialogDescription>
+                                                                                                                                                      </DialogHeader>
+                                                                                                                                                                <div className="mt-4">
+                                                                                                                                                                            {aiSummary ? (
+                                                                                                                                                                                          <pre className="text-sm whitespace-pre-wrap font-sans bg-muted/30 rounded-lg p-4 leading-relaxed">{aiSummary}</pre>
+                                                                                                                                                                                                      ) : (
+                                                                                                                                                                                                                    <div className="min-h-[200px] flex items-center justify-center">
+                                                                                                                                                                                                                                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                                                                                                                                                                                                                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                                                                                                                                                                                                                                                        Generating AI summary...
+                                                                                                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                                                                                                                      </div>
+                                                                                                                                                                                                                                                                                                                  )}
+                                                                                                                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                                                                                                                                      {isStreamingAI && (
+                                                                                                                                                                                                                                                                                                                                                  <div className="flex justify-end mt-4">
+                                                                                                                                                                                                                                                                                                                                                                <Button variant="outline" size="sm" onClick={() => { aiAbortRef.current?.abort(); setIsStreamingAI(false); }}>
+                                                                                                                                                                                                                                                                                                                                                                                Stop
+                                                                                                                                                                                                                                                                                                                                                                                              </Button>
+                                                                                                                                                                                                                                                                                                                                                                                                          </div>
+                                                                                                                                                                                                                                                                                                                                                                                                                    )}
+                                                                                                                                                                                                                                                                                                                                                                                                                            </DialogContent>
+                                                                                                                                                                                                                                                                                                                                                                                                                                  </Dialog>
 
       <Dialog open={showCreateAccountDialog} onOpenChange={setShowCreateAccountDialog}>
         <DialogContent>
