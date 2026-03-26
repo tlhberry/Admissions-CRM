@@ -40,6 +40,7 @@ import {
   UserX,
   ClipboardList,
   UserCog,
+  Brain,
 } from "lucide-react";
 import type { Inquiry, PipelineStage, Company } from "@shared/schema";
 import { stageDisplayNames } from "@shared/schema";
