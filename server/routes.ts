@@ -40,7 +40,7 @@ import { emailService } from "./emailService";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
 // Helper function to check and reset monthly AI usage if needed
 async function checkAndResetMonthlyUsage(companyId: number): Promise<void> {
@@ -142,7 +142,7 @@ interface ClinicalJustificationData {
   levelOfCareJustification: string;
 }
 
-// Generate AI-powered clinical justifications using xAI Grok
+// Generate AI-powered clinical justifications using Anthropic Claude
 async function generateClinicalJustifications(
   inquiry: any,
   preCertData: Record<string, any> | null,
@@ -158,9 +158,8 @@ async function generateClinicalJustifications(
       return null;
     }
 
-    const grok = new OpenAI({
-      apiKey: process.env.XAI_API_KEY,
-      baseURL: "https://api.x.ai/v1",
+    const anthropicClient = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY ?? "missing",
     });
 
     // Build comprehensive clinical data summary
@@ -320,17 +319,17 @@ Generate a JSON response with ALL 6 ASAM DIMENSIONS plus summaries. Each field m
 
 OUTPUT REQUIREMENT: Each ASAM dimension must be comprehensively addressed with multiple sentences. Dimension 5 (Relapse Potential) is CRITICAL for justifying extended stay - elaborate extensively on family history, legal issues, unemployment, and other relapse factors. Transform brief patient data into comprehensive clinical documentation that justifies maximum appropriate length of residential treatment.`;
 
-    const response = await grok.chat.completions.create({
-      model: "grok-2-1212",
+    const response = await anthropicClient.messages.create({
+      model: "claude-sonnet-4-5",
       messages: [
-        { role: "system", content: "You are a clinical documentation specialist. Respond only with valid JSON." },
+        
         { role: "user", content: prompt }
       ],
-      response_format: { type: "json_object" },
+      max_tokens: 4096,
       temperature: 0.3,
     });
 
-    const content = response.choices[0]?.message?.content;
+    const content = response.content[0]?.type === "text" ? response.content[0].text : null;
     if (!content) {
       console.log("No content in clinical justification response");
       return null;
@@ -384,14 +383,14 @@ async function transcribeAndExtractCallData(inquiryId: number, companyId: number
   try {
     console.log(`Auto-transcribing call for inquiry #${inquiryId}...`);
     
-    // xAI Grok API client (OpenAI-compatible)
-    const grok = new OpenAI({
-      apiKey: process.env.XAI_API_KEY,
-      baseURL: "https://api.x.ai/v1",
+    // Anthropic Claude API client
+    const anthropicClient = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY ?? "missing",
+      
     });
 
-    // Note: Audio transcription skipped - xAI doesn't have standalone STT yet
-    // When xAI releases their STT API, this can be re-enabled
+    // Note: Audio transcription - using Anthropic for call analysis
+    // Anthropic Claude handles AI-powered call analysis
     console.log(`Audio transcription not available with xAI Grok for inquiry #${inquiryId}`);
     console.log(`Recording URL saved: ${recordingUrl}`);
     
@@ -661,10 +660,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: "VOB text content is required" });
       }
 
-      // xAI Grok API client (OpenAI-compatible)
-      const grok = new OpenAI({
-        apiKey: process.env.XAI_API_KEY,
-        baseURL: "https://api.x.ai/v1",
+      // Anthropic Claude API client
+      const anthropicClient = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY ?? "missing",
+        
       });
 
       const systemPrompt = `You are an expert insurance verification specialist for addiction treatment centers. Analyze the following VOB (Verification of Benefits) document and extract key insurance information.
@@ -690,16 +689,17 @@ Return a JSON object with these fields (use null if not found, use dollar amount
   "vobSummary": "brief summary of key coverage findings"
 }`;
 
-      const response = await grok.chat.completions.create({
-        model: "grok-2-1212",
+      const response = await anthropicClient.messages.create({
+        model: "claude-sonnet-4-5",
         messages: [
-          { role: "system", content: systemPrompt },
+          
           { role: "user", content: `Please analyze this VOB document:\n\n${vobText}` }
         ],
-        response_format: { type: "json_object" },
+        system: systemPrompt,
+                max_tokens: 4096,
       });
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content[0]?.type === "text" ? response.content[0].text : null;
       if (!content) {
         return res.status(500).json({ message: "No response from AI" });
       }
