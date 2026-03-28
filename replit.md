@@ -16,7 +16,7 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - **Backend**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
 - **Authentication**: Replit Auth (OpenID Connect)
-- **AI**: OpenAI integration for call transcription (Whisper + GPT)
+- **AI**: Anthropic Claude AI for clinical justifications and VOB insurance analysis
 - **Charts**: Recharts for analytics visualization
 
 ## Project Structure
@@ -58,7 +58,7 @@ AdmitSimple is a mobile-friendly admissions CRM designed for addiction treatment
 - Full inquiry CRUD operations
 - Stage progression with form validation
 - Insurance verification workflow
-- AI-powered call transcription (OpenAI)
+- AI-powered clinical justifications and VOB analysis (Anthropic Claude)
 - Auto-generated admission summaries
 
 ### Phase 2 Features (Recently Added)
