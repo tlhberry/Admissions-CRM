@@ -391,7 +391,7 @@ async function transcribeAndExtractCallData(inquiryId: number, companyId: number
 
     // Note: Audio transcription - using Anthropic for call analysis
     // Anthropic Claude handles AI-powered call analysis
-    console.log(`Audio transcription not available with xAI Grok for inquiry #${inquiryId}`);
+    console.log(`Audio transcription not available - Anthropic Claude handles AI analysis for inquiry #${inquiryId}`);
     console.log(`Recording URL saved: ${recordingUrl}`);
     
     // For now, just save the recording URL without transcription
@@ -1635,9 +1635,9 @@ Return a JSON object with these fields (use null if not found, use dollar amount
         return res.status(400).json({ message: "No call recording URL available for this inquiry" });
       }
 
-      // Audio transcription not available with xAI Grok yet
+      // Audio transcription not available - Anthropic Claude handles AI analysis yet
       return res.status(503).json({ 
-        message: "Audio transcription is temporarily unavailable. xAI is working on adding speech-to-text capabilities.",
+        message: "Audio transcription is not available. Anthropic Claude handles AI-powered call analysis.",
         aiDisabled: true 
       });
     } catch (error) {
