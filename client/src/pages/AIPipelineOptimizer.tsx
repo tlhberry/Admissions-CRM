@@ -1,50 +1,60 @@
- Streaming</Badge>
-         </div>
-                 <div className="grid gap-4 sm:grid-cols-3 mb-6">
-                           {[
-                                       { icon: Target, label: "Priority Actions", color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300" },
-                                                   { icon: CheckCircle2, label: "Quick Wins", color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" },
-                                                               { icon: Brain, label: "Strategy", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" },
-                                                                         ].map(({ icon: Icon, label, color }) => (
-                                                                                     <Card key={label} className="text-center p-4">
-                                                                                                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-2 ${color}`}>
-                                                                                                                   <Icon className="w-5 h-5" />
-                                                                                                                                 </div>
-                                                                                                                                               <p className="text-sm font-medium">{label}</p>
-                                                                                                                                                           </Card>
-                                                                                                                                                                     ))}
-                                                                                                                                                                             </div>
-                                                                                                                                                                                     <Card>
-                                                                                                                                                                                               <CardHeader className="pb-3">
-                                                                                                                                                                                                           <div className="flex items-center justify-between">
-                                                                                                                                                                                                                         <CardTitle className="text-base">Optimization Report</CardTitle>
-                                                                                                                                                                                                                                       <div className="flex gap-2">
-                                                                                                                                                                                                                                                       {isStreaming && <Button variant="outline" size="sm" onClick={() => abortRef.current?.abort()}>Stop</Button>}
-                                                                                                                                                                                                                                                                       <Button onClick={handleOptimize} disabled={isStreaming} size="sm">
-                                                                                                                                                                                                                                                                                         {isStreaming ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Optimizing...</> : <><Zap className="w-4 h-4 mr-2" /> Optimize Pipeline</>}
-                                                                                                                                                                                                                                                                                                         </Button>
-                                                                                                                                                                                                                                                                                                                       </div>
-                                                                                                                                                                                                                                                                                                                                   </div>
-                                                                                                                                                                                                                                                                                                                                             </CardHeader>
-                                                                                                                                                                                                                                                                                                                                                       <CardContent>
-                                                                                                                                                                                                                                                                                                                                                                   {result ? (
-                                                                                                                                                                                                                                                                                                                                                                                 <pre className="text-sm whitespace-pre-wrap font-sans bg-muted/30 rounded-lg p-4 leading-relaxed">{result}</pre>
-                                                                                                                                                                                                                                                                                                                                                                                             ) : (
-                                                                                                                                                                                                                                                                                                                                                                                                           <div className="min-h-[250px] flex items-center justify-center text-muted-foreground text-sm">
-                                                                                                                                                                                                                                                                                                                                                                                                                           {isStreaming ? (
-                                                                                                                                                                                                                                                                                                                                                                                                                                             <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing pipeline for optimization opportunities...</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                             ) : (
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                               <div className="text-center">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   <Zap className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       <p>Click "Optimize Pipeline" to get personalized action recommendations</p>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           <p className="text-xs mt-1 opacity-60">AI will analyze all active inquiries and suggest next steps</p>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             )}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       )}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 </CardContent>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         </Card>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               </main>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     );
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Brain, GitBranch, Zap } from "lucide-react";
+
+export default function AIPipelineOptimizer() {
+  const [recommendations, setRecommendations] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const optimize = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/ai/pipeline-optimize", { method: "POST" });
+      const data = await response.json();
+      setRecommendations(data.recommendations || "No recommendations generated.");
+    } catch (error) {
+      setRecommendations("Error generating recommendations. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-6 max-w-3xl space-y-6">
+      <div className="flex items-center gap-2">
+        <Brain className="w-6 h-6" />
+        <h1 className="text-2xl font-bold">AI Pipeline Optimizer</h1>
+        <Badge variant="secondary" className="text-xs">claude-sonnet-4-5</Badge>
+      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <GitBranch className="w-4 h-4" />
+            Pipeline Optimization
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Analyze your admissions pipeline and get AI-powered recommendations to improve conversion rates and reduce bottlenecks.
+          </p>
+          <Button onClick={optimize} disabled={isLoading} className="w-full">
+            <Zap className="w-4 h-4 mr-2" />
+            {isLoading ? "Optimizing..." : "Optimize Pipeline"}
+          </Button>
+        </CardContent>
+      </Card>
+      {recommendations && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Recommendations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap text-sm">{recommendations}</pre>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

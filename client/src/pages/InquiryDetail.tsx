@@ -443,17 +443,17 @@ Level of Care: ${inquiry.levelOfCare ? levelOfCareDisplayNames[inquiry.levelOfCa
             <Badge className={`${stageColors[stage!]} border-0`}>
               {stageDisplayNames[stage!]}
             </Badge>
-            <                <Button
-                              variant="outline"
-                                                size="sm"
-                                                                  onClick={handleAISummary}
-                                                                                    data-testid="button-ai-summary"
-                                                                                                      className="hidden sm:flex items-center gap-2"
-                                                                                                                      >
-                                                                                                                                        <Brain className="w-4 h-4" />
-                                                                                                                                                          AI Summary
-                                                                                                                                                                          </Button>
-              ThemeToggle />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAISummary}
+              data-testid="button-ai-summary"
+              className="hidden sm:flex items-center gap-2"
+            >
+              <Brain className="w-4 h-4" />
+              AI Summary
+            </Button>
+            <ThemeToggle />
           </div>
         </div>
       </header>

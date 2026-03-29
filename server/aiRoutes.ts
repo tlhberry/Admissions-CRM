@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
-import { TextractClient, DetectDocumentTextCommand } from '@aws-sdk/client-textract';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { extractTextFromDocument, uploadToS3 as uploadToS3Wrapper } from './aws/textract';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
@@ -9,7 +8,7 @@ import PDFDocument from 'pdfkit';
 import rateLimit from 'express-rate-limit';
 import { storage } from './storage';
 import { isAuthenticated } from './replitAuth';
-import { db } from './db';h
+import { db } from './db';
 import { deidentifyInquiry } from './lib/deidentify';
 import {
   aiLogs,
@@ -49,29 +48,18 @@ const aiUserRateLimiter = rateLimit({
 });
 
 // ---------------------------------------------------------------------------
-// AWS helpers
+// AWS helpers (via safe wrapper in server/aws/textract.ts)
 // ---------------------------------------------------------------------------
-const textractClient = new TextractClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
-const s3Client = new S3Client({ region: process.env.AWS_REGION ?? 'us-east-1' });
-const S3_BUCKET = process.env.AWS_S3_BUCKET ?? process.env.S3_BUCKET ?? '';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 async function extractTextViaTextract(buffer: Buffer): Promise<string> {
-  const result = await textractClient.send(
-    new DetectDocumentTextCommand({ Document: { Bytes: buffer } })
-  );
-  return (
-    result.Blocks?.filter((b) => b.BlockType === 'LINE')
-      .map((b) => b.Text ?? '')
-      .join('\n') ?? ''
-  );
+  const result = await extractTextFromDocument(buffer);
+  return result.text;
 }
 
 async function uploadToS3(buffer: Buffer, key: string, mimeType: string): Promise<string> {
-  await s3Client.send(
-    new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: mimeType })
-  );
+  await uploadToS3Wrapper(buffer, key, mimeType);
   return key;
 }
 

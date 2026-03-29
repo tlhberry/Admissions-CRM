@@ -1,51 +1,61 @@
- Streaming</Badge>
-         </div>
-                 <div className="grid gap-4 sm:grid-cols-3 mb-6">
-                           {[
-                                       { icon: TrendingUp, label: "Conversion Trends", color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" },
-                                                   { icon: AlertCircle, label: "Bottlenecks", color: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300" },
-                                                               { icon: Brain, label: "Opportunities", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" },
-                                                                         ].map(({ icon: Icon, label, color }) => (
-                                                                                     <Card key={label} className="text-center p-4">
-                                                                                                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-2 ${color}`}>
-                                                                                                                   <Icon className="w-5 h-5" />
-                                                                                                                                 </div>
-                                                                                                                                               <p className="text-sm font-medium">{label}</p>
-                                                                                                                                                           </Card>
-                                                                                                                                                                     ))}
-                                                                                                                                                                             </div>
-                                                                                                                                                                                     <Card className="mb-6">
-                                                                                                                                                                                               <CardHeader className="pb-3">
-                                                                                                                                                                                                           <div className="flex items-center justify-between">
-                                                                                                                                                                                                                         <CardTitle className="text-base">Pipeline Analysis</CardTitle>
-                                                                                                                                                                                                                                       <div className="flex gap-2">
-                                                                                                                                                                                                                                                       {isStreaming && <Button variant="outline" size="sm" onClick={() => abortRef.current?.abort()}>Stop</Button>}
-                                                                                                                                                                                                                                                                       <Button onClick={handleAnalyze} disabled={isStreaming} size="sm">
-                                                                                                                                                                                                                                                                                         {isStreaming ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing...</> : <><Brain className="w-4 h-4 mr-2" /> Analyze Pipeline</>}
-                                                                                                                                                                                                                                                                                                         </Button>
-                                                                                                                                                                                                                                                                                                                       </div>
-                                                                                                                                                                                                                                                                                                                                   </div>
-                                                                                                                                                                                                                                                                                                                                             </CardHeader>
-                                                                                                                                                                                                                                                                                                                                                       <CardContent>
-                                                                                                                                                                                                                                                                                                                                                                   {result ? (
-                                                                                                                                                                                                                                                                                                                                                                                 <div className="prose prose-sm dark:prose-invert max-w-none">
-                                                                                                                                                                                                                                                                                                                                                                                                 <pre className="text-sm whitespace-pre-wrap font-sans bg-muted/30 rounded-lg p-4 leading-relaxed">{result}</pre>
-                                                                                                                                                                                                                                                                                                                                                                                                               </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                           ) : (
-                                                                                                                                                                                                                                                                                                                                                                                                                                         <div className="min-h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                         {isStreaming ? (
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                           <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing your pipeline...</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           ) : (
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             <div className="text-center">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     <p>Click "Analyze Pipeline" to get AI-powered insights</p>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       )}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 )}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           </CardContent>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   </Card>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         </main>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               );
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               }
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Brain, TrendingUp, BarChart2 } from "lucide-react";
+
+export default function AIInsights() {
+  const [insights, setInsights] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const generateInsights = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/ai/insights", { method: "POST" });
+      const data = await response.json();
+      setInsights(data.insights || "No insights generated.");
+    } catch (error) {
+      setInsights("Error generating insights. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-6 max-w-3xl space-y-6">
+      <div className="flex items-center gap-2">
+        <Brain className="w-6 h-6" />
+        <h1 className="text-2xl font-bold">AI Insights</h1>
+        <Badge variant="secondary" className="text-xs">claude-sonnet-4-5</Badge>
+      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" />
+            Admissions Intelligence
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Generate AI-powered insights from your admissions data to identify trends and opportunities.
+          </p>
+          <Button onClick={generateInsights} disabled={isLoading} className="w-full">
+            <BarChart2 className="w-4 h-4 mr-2" />
+            {isLoading ? "Analyzing..." : "Generate Insights"}
+          </Button>
+        </CardContent>
+      </Card>
+      {insights && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Analysis Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap text-sm">{insights}</pre>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
